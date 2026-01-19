@@ -1,2 +1,4 @@
 # Crediseach
 Your own search agent and price matcher 
+Currently under local build :) 
+uploading soon ...
