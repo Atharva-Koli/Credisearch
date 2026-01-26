@@ -7,5 +7,6 @@ search and response done, app online. Fast api Live
 
 plan for Api, selection, security, swagger ui response validation 
 
-idk ,, why github isnot considering my commits in projects 
-there fore here i am comitng issuesi n reamde .md 
+idk why GitHub is not considering my commits in projects 
+Therefore, here I am committing issues in README .md 
+tomorrow backend will be done
