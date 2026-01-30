@@ -48,3 +48,52 @@ def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
             continue
 
     return results
+
+
+# Additional normalization function for SearchAPI results:
+
+
+def normalize_searchapi_results(data: dict, limit: int = 5):
+    """
+    Converts raw SearchAPI Google Shopping response into PriceItem objects.
+    """
+    results = []
+
+    shopping_results = data.get("shopping_results", [])
+
+    for item in shopping_results:
+        try:
+            title = item.get("title")
+            link = item.get("link") or item.get("product_link")
+
+            price = item.get("extracted_price")
+
+            if price is None:
+                price_raw = item.get("price")
+                if price_raw:
+                    price = float(
+                        price_raw.replace("₹", "")
+                        .replace(",", "")
+                        .strip()
+                    )
+
+            if not title or not price or not link:
+                continue
+
+            results.append(
+                PriceItem(
+                    source="searchapi",
+                    title=title,
+                    price=float(price),
+                    currency="INR",
+                    url=link,
+                )
+            )
+
+            if len(results) >= limit:
+                break
+
+        except Exception:
+            continue
+
+    return results
