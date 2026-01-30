@@ -97,3 +97,20 @@ def normalize_searchapi_results(data: dict, limit: int = 5):
             continue
 
     return results
+
+
+#sorting and merging function to get best prices
+def merge_price_results(
+    serpapi_results: list,
+    searchapi_results: list,
+    limit: int = 5,
+):
+    """
+    Merge and sort price results from multiple sources.
+    """
+    combined = serpapi_results + searchapi_results
+
+    # Sort by price (ascending)
+    combined.sort(key=lambda x: x.price)
+
+    return combined[:limit]
