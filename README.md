@@ -6,6 +6,7 @@ uploading soon ...
 search and response done, app online. Fast api Live 
 
 Milestone reached !!!!
-backend end to end service done ....   :)
-lesss gooo 2Apis done ,Search results normalisation done 
-ok Search api is causing new issues over serpAPi results , gotta look into it ASAP
+backend end-to-end service done ....   :)
+less gooo 2Apis done, Search results normalisation done 
+ok Search api is causing new issues over SerpAPI results, gotta look into it ASAP
+Issue found: Caused by currency difference in fetched results. TO be resolved in normalisation / backend/app/aggregator.py 
