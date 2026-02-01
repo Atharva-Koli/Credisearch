@@ -10,3 +10,4 @@ backend end-to-end service done ....   :)
 less gooo 2Apis done, Search results normalisation done 
 ok Search api is causing new issues over SerpAPI results, gotta look into it ASAP
 Issue found: Caused by currency difference in fetched results. TO be resolved in normalisation / backend/app/aggregator.py 
+another issue regarding search results of api 
