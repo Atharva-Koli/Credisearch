@@ -12,3 +12,4 @@ ok Search api is causing new issues over SerpAPI results, gotta look into it ASA
 Issue found: Caused by currency difference in fetched results. TO be resolved in normalisation / backend/app/aggregator.py 
 another issue regarding search results of api 
 if conv doesnt work, remove search api 
+-- dev out for 2 days working on design issues --
