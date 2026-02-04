@@ -13,5 +13,5 @@ Issue found: Caused by currency difference in fetched results. TO be resolved in
 Another issue regarding the search results of api 
 If the conv doesn't work, remove the search api 
 -- dev out for 2 days working on design issues --
-front end design finalised ,,
+front-end design finalised, ideally js and React components for usage 
 
