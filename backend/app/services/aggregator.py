@@ -1,10 +1,13 @@
 from typing import List
 from app.models.price import PriceItem
 
+USD_TO_INR = 83.0  # temporary fixed rate
+
 
 def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
     """
     Converts raw SerpAPI Google Shopping response into PriceItem objects.
+    Prices are normalized to INR.
     """
     results: List[PriceItem] = []
 
@@ -15,27 +18,29 @@ def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
             title = item.get("title")
             link = item.get("product_link")
 
-            # Prefer numeric price if available
-            price = item.get("extracted_price")
+            price_usd = item.get("extracted_price")
 
-            # Fallback: parse price string
-            if price is None:
+            if price_usd is None:
                 price_raw = item.get("price")
                 if price_raw:
-                    price = float(
-                        price_raw.replace("₹", "")
+                    # handles "$699", "$1,299", etc.
+                    price_usd = float(
+                        price_raw.replace("$", "")
                         .replace(",", "")
                         .strip()
                     )
 
-            if not title or not price or not link:
+            if not title or not price_usd or not link:
                 continue
+
+            # 🔑 Convert USD → INR
+            price_inr = float(price_usd) * USD_TO_INR
 
             results.append(
                 PriceItem(
-                    source="google_shopping",
+                    source="serpapi",
                     title=title,
-                    price=float(price),
+                    price=price_inr,
                     currency="INR",
                     url=link,
                 )
@@ -48,6 +53,7 @@ def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
             continue
 
     return results
+
 
 
 # Additional normalization function for SearchAPI results:
