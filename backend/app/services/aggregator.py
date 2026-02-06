@@ -4,13 +4,12 @@ from app.models.price import PriceItem
 USD_TO_INR = 83.0  # temporary fixed rate
 
 
-def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
+def normalize_serpapi_results(data: dict, limit: int = 5):
     """
     Converts raw SerpAPI Google Shopping response into PriceItem objects.
-    Prices are normalized to INR.
+    Normalizes all prices to INR.
     """
-    results: List[PriceItem] = []
-
+    results = []
     shopping_results = data.get("shopping_results", [])
 
     for item in shopping_results:
@@ -18,29 +17,46 @@ def normalize_serpapi_results(data: dict, limit: int = 5) -> List[PriceItem]:
             title = item.get("title")
             link = item.get("product_link")
 
-            price_usd = item.get("extracted_price")
+            price_raw = item.get("price")
+            extracted_price = item.get("extracted_price")
 
-            if price_usd is None:
-                price_raw = item.get("price")
-                if price_raw:
-                    # handles "$699", "$1,299", etc.
+            if not title or not link:
+                continue
+
+            price_inr = None
+
+            # Case 1: Price string exists → check currency symbol
+            if price_raw:
+                if "₹" in price_raw:
+                    price_inr = float(
+                        price_raw.replace("₹", "")
+                        .replace(",", "")
+                        .strip()
+                    )
+                elif "$" in price_raw:
                     price_usd = float(
                         price_raw.replace("$", "")
                         .replace(",", "")
                         .strip()
                     )
+                    price_inr = price_usd * USD_TO_INR
 
-            if not title or not price_usd or not link:
+            # Case 2: Fallback to extracted_price
+            elif extracted_price:
+                # Heuristic: small values are USD, large are INR
+                if extracted_price < 2000:
+                    price_inr = extracted_price * USD_TO_INR
+                else:
+                    price_inr = extracted_price
+
+            if not price_inr:
                 continue
-
-            # 🔑 Convert USD → INR
-            price_inr = float(price_usd) * USD_TO_INR
 
             results.append(
                 PriceItem(
                     source="serpapi",
                     title=title,
-                    price=price_inr,
+                    price=float(price_inr),
                     currency="INR",
                     url=link,
                 )
