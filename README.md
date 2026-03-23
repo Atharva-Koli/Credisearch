@@ -13,3 +13,5 @@ planning to convert this to an api - api -> layered service
 could be published/launched as a Chrome extension by the end of March 
 frontend under localdev 
 
+deployment link 
+https://credisearchvercel.vercel.app/docs#/search/search_prices_search_get
