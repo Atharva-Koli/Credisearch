@@ -184,7 +184,7 @@ Real searches return junk that isn't the product. Four layers remove it:
 
 Each flagged group gets `excluded_reason` (accessory / spare part / add-on / price outlier) and is hidden by "Hide accessories & parts".
 
-**Relevance tiers:** every group is compared with the *query* (`_mismatch`): `exact` (what you searched), `variant` (an extra or missing variant word, or different storage: the Pro Mini, or the plain Reno15 when you searched Reno15 Pro), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
+**Relevance tiers:** every group is compared with the *query* (`_mismatch`). A group sharing fewer than half of the searched words (`MIN_QUERY_OVERLAP`) is off-topic; Google Shopping returns Skechers shoes for "alfa hockey stick". The tiers are: `exact` (what you searched), `variant` (an extra or missing variant word, or different storage: the Pro Mini, or the plain Reno15 when you searched Reno15 Pro), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
 
 **Glued model numbers:** "Reno15" and "iPhone15" have their generation number extracted, so "Reno15 Pro" vs "Reno 14 Pro" is correctly treated as different models.
 

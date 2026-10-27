@@ -264,3 +264,15 @@ def test_product_never_merges_with_its_part():
         "Oppo Reno 15 Pro Mini Display and Touchscreen Combo - 100% Original",
         "Oppo Reno 15 Pro Mini 5G (256 GB) Silver",
     ]) == [0, 1, 0]
+
+
+def test_off_topic_results_are_other():
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url="u") for t, p in [
+        ("SKECHERS Mens DYNAMITE AT Casual Sneakers Shoe", 2999), ("SKECHERS Mens DYNAMITE AT Sneakers", 3419),
+        ("ALFA Y-30 Junior Composite Hockey Stick", 1890), ("Hama Star 78 Mono Monopod", 2399)]]
+    _, groups = analyze(items, "alfa hockey stick")
+    assert groups[0].name.startswith("ALFA")
+    assert {g.relevance for g in groups[1:]} == {"other"}
+    # normal searches are unaffected
+    items = [PriceItem(source="s", title="Apple iPhone 15 (128 GB) - Black", price=69900, currency="INR", url="u")]
+    assert analyze(items, "iphone 15 128gb")[1][0].relevance == "exact"

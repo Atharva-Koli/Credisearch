@@ -13,6 +13,9 @@ from app.services.ml.deal_scorer import score_group
 # almost certainly an accessory or part that slipped past the word lists.
 PRICE_OUTLIER_RATIO = 0.20
 
+# A product must share at least half of the searched words to count as relevant.
+MIN_QUERY_OVERLAP = 0.5
+
 
 def _group_name(titles: List[str]) -> str:
     """Most representative title (median length), with colour words stripped."""
@@ -35,6 +38,11 @@ def _mismatch(query: str, group_name: str) -> int:
     q_words = set(normalize(query).split())
     a = extract_attributes(group_name)
     score = 0
+    # off-topic: shares fewer than half of the searched words ("alfa hockey stick" -> Skechers shoes)
+    q_terms = set(canonical_key(query).split("-")) - {""}
+    g_terms = set(canonical_key(group_name).split("-"))
+    if q_terms and len(q_terms & g_terms) / len(q_terms) < MIN_QUERY_OVERLAP:
+        score += 3
     if q_attrs["model_codes"] and a["model_codes"] and not (q_attrs["model_codes"] & a["model_codes"]):
         score += 3
     if q_attrs["model_nums"] and a["model_nums"] and not (q_attrs["model_nums"] & a["model_nums"]):
