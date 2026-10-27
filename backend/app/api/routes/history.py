@@ -20,11 +20,11 @@ router = APIRouter(tags=["history"])
 # Products searched automatically every day so history keeps growing.
 # Override with TRACKED_PRODUCTS="iphone 16 128gb, pixel 9 ..." in Vercel.
 DEFAULT_TRACKED = [
-    "iphone 15 128gb",
-    "iphone 16 128gb",
-    "samsung galaxy s24 256gb",
-    "oneplus 13r 256gb",
-    "sony wh-1000xm5",
+    "iphone 17",
+    "iphone 16",
+    "oneplus 15r",
+    "oppo reno 15 pro mini 5g",
+    "samsung galaxy s25",
 ]
 # The cron prefers Serper (2,500 credits) so it doesn't eat SerpAPI's 250/month.
 CRON_SOURCES = ["serper"]

@@ -299,7 +299,7 @@ The state lives in process memory, so a new Vercel instance starts fresh. The wo
 
 - **Schedule:** `backend/vercel.json` → `/cron/log-prices` at **02:30 UTC (08:00 IST)** every day.
 - **Auth:** when `CRON_SECRET` is set, Vercel sends `Authorization: Bearer <CRON_SECRET>`; any other caller gets 401.
-- **Products:** `TRACKED_PRODUCTS` env var (comma-separated), else the defaults in `history.py`: iPhone 15 128GB, iPhone 16 128GB, Galaxy S24 256GB, OnePlus 13R 256GB, Sony WH-1000XM5.
+- **Products:** `TRACKED_PRODUCTS` env var (comma-separated), else the defaults in `history.py`: iPhone 17, iPhone 16, OnePlus 15R, Oppo Reno 15 Pro Mini 5G, Samsung Galaxy S25.
 - **Sources:** **Serper only** (falls back to SerpAPI if Serper is unavailable), so it doesn't use up SerpAPI's 250/month. About 5 credits/day ≈ 150/month.
 - **Runs the same `run_search()` pipeline** with `origin="cron"`, so cron data and user data are identical in shape.
 - **Time guard:** stops starting new products after 50 s to stay inside the function time limit.
