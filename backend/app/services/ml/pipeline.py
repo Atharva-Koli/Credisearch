@@ -3,7 +3,9 @@ from statistics import median
 from typing import List, Tuple
 
 from app.models.price import PriceItem, ProductGroup
-from app.services.ml.matcher import cluster_titles, display_name, is_accessory, is_used
+from app.services.ml.matcher import (
+    cluster_titles, display_name, extract_attributes, is_accessory, is_used, normalize,
+)
 from app.services.ml.deal_scorer import score_group
 
 
@@ -62,5 +64,17 @@ def analyze(items: List[PriceItem], query: str) -> Tuple[List[PriceItem], List[P
             suspicious_offers=sum(1 for i in idxs if enriched[i].deal_label == "suspicious"),
         ))
 
-    groups.sort(key=lambda g: (g.is_accessory, g.is_refurbished, -g.offers, g.median_price))
+    # Rank: real products first, then groups whose variant (Pro/Plus/...) and storage
+    # match what the user typed, then new before refurbished, then most offers.
+    q_attrs = extract_attributes(query)
+    q_words = set(normalize(query).split())
+
+    def mismatch(g: ProductGroup) -> int:
+        a = extract_attributes(g.name)
+        score = len(a["variants"] - q_words)
+        if q_attrs["storage"] and a["storage"] and a["storage"] != q_attrs["storage"]:
+            score += 1
+        return score
+
+    groups.sort(key=lambda g: (g.is_accessory, mismatch(g), g.is_refurbished, -g.offers, g.median_price))
     return enriched, groups
