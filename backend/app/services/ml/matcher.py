@@ -15,7 +15,7 @@ NGRAM_SIZES = (3, 4)
 # Words that change WHICH product it is (never merge across these)
 VARIANT_WORDS = {
     "pro", "max", "plus", "mini", "ultra", "lite", "se", "fe", "air",
-    "neo", "edge", "fold", "flip",
+    "neo", "edge", "fold", "flip", "c", "s", "t", "r",
 }
 
 # Condition words: a refurbished phone is not the same offer as a new one
@@ -66,7 +66,9 @@ _BARE_NUM_RE = re.compile(r"\b(\d{1,4})\b(?!\s*(?:gb|tb|mah|mp|hz|inch|in|w|cm|m
 
 def normalize(title: str) -> str:
     t = title.lower()
+    t = re.sub(r"\b(\d{1,2})\s*\+\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)  # "12+512gb" -> "12gb 512gb"
     t = re.sub(r"(?<=[a-z0-9])\+", " plus", t)  # "s24+" -> "s24 plus" (a different product)
+    t = re.sub(r"\b([a-z]{3,}\d{1,3})([cs])\b", r"\1 \2", t)  # "reno15c" -> "reno15 c" (c/s suffix variant)
     # RAM/storage shorthand "8/128" or "8gb/256gb" -> "8gb 128gb"
     t = re.sub(r"\b(\d{1,2})\s*(?:gb)?\s*/\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)
     t = re.sub(r"[()\[\],/|+_]", " ", t)
@@ -76,8 +78,22 @@ def normalize(title: str) -> str:
     return t
 
 
+# Product identity sits at the start of a title; the tail is specs and marketing
+# ("... 200MP Camera & Dimensity 8450 ...") that only dilutes similarity.
+# Attributes (storage, variants, model numbers) still come from the FULL title.
+MAX_TITLE_TOKENS = 5
+
+
+_SPEC_TOKEN_RE = re.compile(r"\d+(\.\d+)?(gb|tb|mp|hz|mah|w|mm|cm|inch|in|nits|fps|k)")
+
+
 def tokens(title: str) -> List[str]:
     return [w for w in normalize(title).split() if w not in STOPWORDS and w not in COLOR_WORDS]
+
+
+def identity_tokens(title: str) -> List[str]:
+    """The words that say WHAT the product is: first few tokens, spec numbers removed."""
+    return [w for w in tokens(title) if re.search(r"[a-z0-9]", w) and not _SPEC_TOKEN_RE.fullmatch(w)][:MAX_TITLE_TOKENS]
 
 
 def extract_attributes(title: str) -> Dict[str, Set[str]]:
@@ -200,7 +216,7 @@ def _char_ngrams(text: str) -> List[str]:
 
 def tfidf_vectors(titles: List[str]) -> List[Dict[str, float]]:
     """Embed each title as an L2-normalised TF-IDF vector over char n-grams."""
-    docs = [Counter(_char_ngrams(" ".join(tokens(t)))) for t in titles]
+    docs = [Counter(_char_ngrams(" ".join(identity_tokens(t)))) for t in titles]
     n_docs = len(docs)
     df = Counter()
     for d in docs:

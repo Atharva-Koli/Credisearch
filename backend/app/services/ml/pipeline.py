@@ -39,7 +39,8 @@ def _mismatch(query: str, group_name: str) -> int:
         score += 3
     if q_attrs["model_nums"] and a["model_nums"] and not (q_attrs["model_nums"] & a["model_nums"]):
         score += 3
-    score += len(a["variants"] - q_words)
+    score += len(a["variants"] - q_words)            # extra variant (searched "15", got "15 Pro")
+    score += len(q_attrs["variants"] - a["variants"])  # missing variant (searched "15 Pro", got "15")
     if q_attrs["storage"] and a["storage"] and a["storage"] != q_attrs["storage"]:
         score += 1
     return score

@@ -87,9 +87,12 @@ All of it is **pure Python** (no numpy, scikit-learn or PyTorch). Section 7 expl
 | Join number + unit | `128 gb` | `128gb` |
 | Join hyphenated model codes | `wh-1000xm5` | `wh1000xm5` |
 | `+` suffix means Plus | `S24+` | `s24 plus` |
-| RAM/storage shorthand | `8/128` | `8gb 128gb` |
+| RAM/storage shorthand | `8/128`, `12+512GB` | `8gb 128gb`, `12gb 512gb` |
+| Letter suffix variant | `Reno15c` | `reno15 c` (c is a variant) |
 | Drop stopwords (marketing/noise) | `new`, `sealed`, `original`, `5g`, `ram`, `smartphone`… | removed |
 | Drop **colour words** | `black`, `blue`, `titanium`, `onyx`… | removed |
+
+**Identity tokens:** only the first **5** meaningful words, with spec tokens removed (200MP, 120Hz, 6.7inch, 512GB…), go into the similarity vector (`identity_tokens`). Product identity sits at the start of a title; the tail is marketing ("…200MP Camera & Dimensity 8450…") that only dilutes similarity. Storage, variants and model numbers are still checked from the **full** title by the guards.
 
 **Why drop colours?** For price comparison, a black and a blue iPhone 15 128GB are the same product at the same price. Keeping colours would split one product into five groups. (This was a real bug during testing: the 128GB iPhone split into 4 groups until colours were removed.)
 
@@ -180,7 +183,7 @@ Real searches return junk that isn't the product. Four layers remove it:
 
 Each flagged group gets `excluded_reason` (accessory / spare part / add-on / price outlier) and is hidden by "Hide accessories & parts".
 
-**Relevance tiers:** every group is compared with the *query* (`_mismatch`): `exact` (what you searched), `variant` (another variant or storage, e.g. the Pro Mini), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
+**Relevance tiers:** every group is compared with the *query* (`_mismatch`): `exact` (what you searched), `variant` (an extra or missing variant word, or different storage: the Pro Mini, or the plain Reno15 when you searched Reno15 Pro), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
 
 **Glued model numbers:** "Reno15" and "iPhone15" have their generation number extracted, so "Reno15 Pro" vs "Reno 14 Pro" is correctly treated as different models.
 

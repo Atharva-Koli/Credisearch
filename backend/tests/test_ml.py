@@ -237,3 +237,22 @@ def test_history_key_is_spelling_independent():
         "Oppo Reno15 Pro 256GB",
     ]}
     assert keys == {"oppo-reno-15-pro-256gb"}
+
+
+def test_real_oppo_listings():
+    assert cluster_titles([
+        "OPPO Reno15 Pro 5G 512GB",
+        "OPPO Reno15 Pro 5G - 200MP Camera & Dimensity 8450 / 12GB 512GB",
+        "OPPO Reno15 Pro 5G Smartphone 12+512GB | 6.7-inch 120Hz",
+        "Oppo Reno15c 5G",
+        "oppo Reno15 5G",
+    ]) == [0, 0, 0, 1, 2]
+
+
+def test_missing_variant_is_not_exact():
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url="u") for t, p in
+             [("OPPO Reno15 Pro 5G 256GB", 64999), ("oppo Reno15 5G 256GB", 52999)]]
+    _, groups = analyze(items, "oppo reno 15 pro")
+    rel = {g.name: g.relevance for g in groups}
+    assert groups[0].name.startswith("OPPO Reno15 Pro")
+    assert rel[groups[1].name] == "variant"
