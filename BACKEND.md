@@ -339,7 +339,7 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 ## 12. Tests
 
-`backend/tests/test_ml.py`: 23 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
+`backend/tests/test_ml.py`: 24 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
 
 | Area | What's covered |
 |---|---|

@@ -61,7 +61,7 @@ COLOR_WORDS = {
 _CONNECTIVITY = {"5g", "4g", "3g"}
 
 _STORAGE_RE = re.compile(r"(\d+)\s*(gb|tb)\b")
-_BARE_NUM_RE = re.compile(r"\b(\d{1,4})\b(?!\s*(?:gb|tb|mah|mp|hz|inch|in|w|cm|mm))")
+_BARE_NUM_RE = re.compile(r"(?<![\d.])\b(\d{1,4})\b(?![.]\d)(?!\s*(?:gb|tb|mah|mp|hz|inch|in|w|cm|mm))")
 
 
 def normalize(title: str) -> str:
@@ -71,6 +71,7 @@ def normalize(title: str) -> str:
     t = re.sub(r"\b([a-z]{3,}\d{1,3})([cs])\b", r"\1 \2", t)  # "reno15c" -> "reno15 c" (c/s suffix variant)
     # RAM/storage shorthand "8/128" or "8gb/256gb" -> "8gb 128gb"
     t = re.sub(r"\b(\d{1,2})\s*(?:gb)?\s*/\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)
+    t = re.sub(r"(\d),(\d)\b", r"\1.\2", t)  # "6,1" (European decimal) -> "6.1"
     t = re.sub(r"[()\[\],/|+_]", " ", t)
     t = re.sub(r"(?<=[a-z0-9])-(?=[a-z0-9])", "", t)  # "wh-1000xm5" -> "wh1000xm5"
     t = re.sub(r"(\d)\s+(gb|tb)\b", r"\1\2", t)  # "128 gb" -> "128gb"
@@ -84,7 +85,7 @@ def normalize(title: str) -> str:
 MAX_TITLE_TOKENS = 5
 
 
-_SPEC_TOKEN_RE = re.compile(r"\d+(\.\d+)?(gb|tb|mp|hz|mah|w|mm|cm|inch|in|nits|fps|k)")
+_SPEC_TOKEN_RE = re.compile(r"\d+(\.\d+)?(gb|tb|mp|hz|mah|w|mm|cm|inch|in|nits|fps|k)|\d+\.\d+")
 
 
 def tokens(title: str) -> List[str]:

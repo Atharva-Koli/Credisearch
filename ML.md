@@ -96,6 +96,7 @@ All of it is **pure Python** (no numpy, scikit-learn or PyTorch). Section 7 expl
 | Strip brackets, commas, slashes, pipes | `(128 GB), Black` | ` 128 GB  Black` |
 | Join number + unit | `128 gb` | `128gb` |
 | Join hyphenated model codes | `wh-1000xm5` | `wh1000xm5` |
+| European decimals (screen sizes) | `6,1` | `6.1` (ignored as a spec, never read as model numbers 6 and 1) |
 | `+` suffix means Plus | `S24+` | `s24 plus` |
 | RAM/storage shorthand | `8/128`, `12+512GB` | `8gb 128gb`, `12gb 512gb` |
 | Letter suffix variant | `Reno15c` | `reno15 c` (c is a variant) |
@@ -190,7 +191,7 @@ Real searches return junk that isn't the product. Four layers remove it:
 | **English only** | `is_english()` in matcher.py, applied in `run_search` *before* the ML | Drop a title if more than 15% of its letters are outside the Latin alphabet (accented Latin like "Café" is kept) | "Oppo Reno 15 PRO MINI 5G स्किन नॉट बैक कवर…" |
 | **Spare parts** | `accessory_reason()` → `PART_WORDS` | lcd, digitizer, touchscreen, combo, folder, motherboard, housing, flex, spare, panel, assembly… (unless searched for) | "Display … (Combo Folder) \| Maxbhi", "Display and Touchscreen Combo" |
 | **Add-ons ("X for Y")** | `accessory_reason()` | If the words *before* " for " contain nothing the user searched, the item is something *for* the product, not the product | "Battery Door for Oppo Reno 15 Pro" |
-| **Price outliers** | `_flag_price_outliers()` in pipeline.py | **Anchor** = offer-weighted median price of the relevant, new, non-accessory groups. Any group under **20%** of the anchor is flagged. This catches anything the word lists miss. | an ₹899 "shell" when the phone's anchor is ₹64,000 |
+| **Price outliers** | `_flag_price_outliers()` in pipeline.py | **Anchor** = offer-weighted median price of the relevant, new, non-accessory groups. Any group under **20%** of the anchor, or over **5×** it, is flagged. This catches anything the word lists miss. | an ₹899 "shell" when the phone's anchor is ₹64,000; a ₹17.8 lakh "iPhone 15 with TikTok" |
 
 Each flagged group gets `excluded_reason` (accessory / spare part / add-on / price outlier) and is hidden by "Hide accessories & parts".
 
@@ -333,7 +334,7 @@ The route (`search.py`) runs the ML on **all** fetched offers *before* trimming 
 | `MAX_TITLE_TOKENS` | matcher.py | 5 | More of the title counts (more marketing noise) | Only the brand/model words count |
 | `VARIANT_WORDS`, `USED_WORDS`, `ACCESSORY_WORDS`, `PART_WORDS`, `COLOR_WORDS`, `STOPWORDS` | matcher.py | lists | Add words when you find a new failure | |
 | `is_english(max_foreign_ratio)` | matcher.py | 0.15 | Allows more non-Latin letters | Stricter English-only |
-| `PRICE_OUTLIER_RATIO` | pipeline.py | 0.20 | Flags more cheap groups as accessories | Flags fewer |
+| `PRICE_OUTLIER_RATIO` / `PRICE_OUTLIER_HIGH_RATIO` | pipeline.py | 0.20 / 5.0 | Flags more cheap (or fewer expensive) groups | The opposite |
 | `MIN_QUERY_OVERLAP` | pipeline.py | 0.5 | More results counted as off-topic | Fewer |
 | `SUSPICIOUS_RATIO` | deal_scorer.py | 0.55 | Flags more listings as suspicious | Flags fewer |
 | `GREAT_DEAL_PCT` | deal_scorer.py | −7% | | |
@@ -443,7 +444,7 @@ Yes: it's *unsupervised* ML. TF-IDF is a learned representation (the weights com
 Cost, latency, and explainability. An LLM call per listing would cost money and seconds on every search. This runs in milliseconds for free, and every decision can be explained ("not merged because 128GB ≠ 256GB").
 
 **"How do you know it works?"**
-Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (23 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
+Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (24 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
 
 **"What was the hardest part?"**
 Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars; Hindi listings and spare parts (display combos) showed up as "products"; Google returned Skechers shoes for a hockey-stick search. Each one became a rule plus a test.

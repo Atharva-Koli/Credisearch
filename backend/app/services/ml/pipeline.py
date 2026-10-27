@@ -12,6 +12,8 @@ from app.services.ml.deal_scorer import score_group
 # A product group priced below this fraction of the main product's price is
 # almost certainly an accessory or part that slipped past the word lists.
 PRICE_OUTLIER_RATIO = 0.20
+# ...and one priced above 5x the anchor is a mis-priced / wrong-currency listing.
+PRICE_OUTLIER_HIGH_RATIO = 5.0
 
 # A product must share at least half of the searched words to count as relevant.
 MIN_QUERY_OVERLAP = 0.5
@@ -131,7 +133,8 @@ def _flag_price_outliers(groups: List[ProductGroup]) -> None:
     Cross-group check. The 'anchor' is the typical price of the product the user
     is looking for: the offer-weighted median of the relevant, non-accessory,
     new-condition groups. Any group priced under 20% of the anchor (a ₹229 skin
-    or a ₹4,309 display when the phone costs ₹64,000) is flagged as an outlier.
+    or a ₹4,309 display when the phone costs ₹64,000), or over 5x it (a ₹17.8 lakh
+    'iPhone 15 with TikTok'), is flagged as an outlier.
     """
     candidates = [g for g in groups if not g.is_accessory and not g.is_refurbished and g.relevance != "other"]
     if not candidates:
@@ -141,6 +144,8 @@ def _flag_price_outliers(groups: List[ProductGroup]) -> None:
     weighted = sorted(p for g in candidates for p in [g.median_price] * g.offers)
     anchor = weighted[len(weighted) // 2]
     for g in groups:
-        if not g.is_accessory and g.median_price < anchor * PRICE_OUTLIER_RATIO:
+        if g.is_accessory:
+            continue
+        if g.median_price < anchor * PRICE_OUTLIER_RATIO or g.median_price > anchor * PRICE_OUTLIER_HIGH_RATIO:
             g.is_accessory = True
             g.excluded_reason = "price outlier"

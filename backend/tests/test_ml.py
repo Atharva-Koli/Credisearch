@@ -276,3 +276,21 @@ def test_off_topic_results_are_other():
     # normal searches are unaffected
     items = [PriceItem(source="s", title="Apple iPhone 15 (128 GB) - Black", price=69900, currency="INR", url="u")]
     assert analyze(items, "iphone 15 128gb")[1][0].relevance == "exact"
+
+
+def test_decimal_screen_size_and_high_price_outlier():
+    assert cluster_titles([
+        "Apple iPhone 15 6,1 128GB", "Apple iPhone 15 128GB", "Apple iPhone 14 6,1 128GB",
+    ]) == [0, 0, 1]
+    from app.models.price import ProductGroup
+    from app.services.ml.pipeline import _flag_price_outliers
+
+    def grp(gid, offers, med):
+        return ProductGroup(group_id=gid, name=gid, offers=offers, min_price=med, median_price=med,
+                            max_price=med, best_offer_url="u", best_offer_price=med, is_accessory=False,
+                            suspicious_offers=0)
+
+    groups = [grp("iphone", 6, 66999), grp("tiktok", 2, 1785566), grp("skin", 1, 229)]
+    _flag_price_outliers(groups)
+    reasons = {g.group_id: g.excluded_reason for g in groups}
+    assert reasons == {"iphone": None, "tiktok": "price outlier", "skin": "price outlier"}
