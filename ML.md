@@ -86,6 +86,8 @@ All of it is **pure Python** (no numpy, scikit-learn or PyTorch). Section 7 expl
 | Strip brackets, commas, slashes, pipes | `(128 GB), Black` | ` 128 GB  Black` |
 | Join number + unit | `128 gb` | `128gb` |
 | Join hyphenated model codes | `wh-1000xm5` | `wh1000xm5` |
+| `+` suffix means Plus | `S24+` | `s24 plus` |
+| RAM/storage shorthand | `8/128` | `8gb 128gb` |
 | Drop stopwords (marketing/noise) | `new`, `sealed`, `original`, `5g`, `ram`, `smartphone`… | removed |
 | Drop **colour words** | `black`, `blue`, `titanium`, `onyx`… | removed |
 
@@ -272,7 +274,7 @@ Six offers for iPhone 15 128GB:
    - builds a `ProductGroup`: name, offer count, min/median/max price, **best trusted offer** (cheapest non-suspicious), suspicious count
 3. **Ranks groups:**
    1. real products before accessories
-   2. groups that match the query's variant and storage first (searching "iphone 15 128gb" puts the plain 128GB model above Plus and 256GB)
+   2. groups that match the query first: a different model number or code (S23/S26 when you searched S24) ranks last, and a different variant or storage ranks below an exact match (searching "iphone 15 128gb" puts the plain 128GB model above Plus and 256GB)
    3. new before refurbished
    4. more offers first (more evidence), then cheaper
 
@@ -379,7 +381,7 @@ Cost, latency, and explainability. An LLM call per listing would cost money and 
 Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches. The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
 
 **"What was the hardest part?"**
-Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB") broke the storage check; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars. Each one became a rule plus a test.
+Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars. Each one became a rule plus a test.
 
 **"What would you do with more time?"**
 Price history and a "buy now or wait" prediction (§10), and a labelled evaluation set.
