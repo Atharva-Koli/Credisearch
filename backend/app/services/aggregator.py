@@ -126,6 +126,52 @@ def normalize_searchapi_results(data: dict, limit: int = 5):
     return results
 
 
+def _price_to_inr(price_raw: str):
+    """'₹65,999.00' -> 65999.0 ; '$309.00' -> converted ; other currencies -> None."""
+    if not price_raw:
+        return None
+    number = re.sub(r"[^\d.]", "", price_raw.replace(",", ""))
+    if not number:
+        return None
+    value = float(number)
+    if "₹" in price_raw or "rs" in price_raw.lower():
+        return value
+    if "$" in price_raw:
+        return value * USD_TO_INR
+    if re.search(r"[€£¥]", price_raw):
+        return None
+    return value  # no symbol: assume local currency (we request gl=in)
+
+
+def normalize_serper_results(data: dict, limit: int = 5):
+    """
+    Converts raw Serper.dev Google Shopping response into PriceItem objects.
+    """
+    results = []
+    for item in data.get("shopping", []):
+        try:
+            title = item.get("title")
+            link = item.get("link")
+            price = _price_to_inr(item.get("price") or "")
+            if not title or not link or not price:
+                continue
+            seller = item.get("source")
+            results.append(
+                PriceItem(
+                    source=f"serper · {seller}" if seller else "serper",
+                    title=title,
+                    price=float(price),
+                    currency="INR",
+                    url=link,
+                )
+            )
+            if len(results) >= limit:
+                break
+        except Exception:
+            continue
+    return results
+
+
 #sorting and merging function to get best prices
 def merge_price_results(
     serpapi_results: list,
