@@ -71,7 +71,13 @@ def analyze(items: List[PriceItem], query: str) -> Tuple[List[PriceItem], List[P
 
     def mismatch(g: ProductGroup) -> int:
         a = extract_attributes(g.name)
-        score = len(a["variants"] - q_words)
+        score = 0
+        # different model than searched (S23/S26 when you asked for S24) -> rank last
+        if q_attrs["model_codes"] and a["model_codes"] and not (q_attrs["model_codes"] & a["model_codes"]):
+            score += 3
+        if q_attrs["model_nums"] and a["model_nums"] and not (q_attrs["model_nums"] & a["model_nums"]):
+            score += 3
+        score += len(a["variants"] - q_words)
         if q_attrs["storage"] and a["storage"] and a["storage"] != q_attrs["storage"]:
             score += 1
         return score

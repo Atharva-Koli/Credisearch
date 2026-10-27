@@ -114,3 +114,19 @@ def test_plus_sign_is_a_variant():
         "Samsung Galaxy S24 Plus 256GB Onyx Black",
         "Samsung Galaxy S24 256GB",
     ]) == [0, 0, 1]
+
+
+def test_ram_storage_shorthand():
+    from app.services.ml.matcher import extract_attributes
+    assert extract_attributes("Samsung Galaxy S24 8/128")["storage"] == {"128gb"}
+    assert extract_attributes("Samsung Galaxy S24 (8GB/256GB)")["storage"] == {"256gb"}
+    assert cluster_titles(["Samsung Galaxy S24 8/128", "Samsung Galaxy S24 8/256"]) == [0, 1]
+
+
+def test_ranking_puts_searched_model_first():
+    titles = ["Samsung Galaxy S23 256GB", "Samsung Galaxy S23 256 GB Black",
+              "Samsung Galaxy S26 Ultra 256GB", "Samsung Galaxy S24 256GB"]
+    items = [PriceItem(source="s", title=t, price=50000 + i, currency="INR", url="u")
+             for i, t in enumerate(titles)]
+    _, groups = analyze(items, "samsung galaxy s24 256gb")
+    assert "S24" in groups[0].name

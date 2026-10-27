@@ -59,6 +59,8 @@ _BARE_NUM_RE = re.compile(r"\b(\d{1,4})\b(?!\s*(?:gb|tb|mah|mp|hz|inch|in|w|cm|m
 def normalize(title: str) -> str:
     t = title.lower()
     t = re.sub(r"(?<=[a-z0-9])\+", " plus", t)  # "s24+" -> "s24 plus" (a different product)
+    # RAM/storage shorthand "8/128" or "8gb/256gb" -> "8gb 128gb"
+    t = re.sub(r"\b(\d{1,2})\s*(?:gb)?\s*/\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)
     t = re.sub(r"[()\[\],/|+_]", " ", t)
     t = re.sub(r"(?<=[a-z0-9])-(?=[a-z0-9])", "", t)  # "wh-1000xm5" -> "wh1000xm5"
     t = re.sub(r"(\d)\s+(gb|tb)\b", r"\1\2", t)  # "128 gb" -> "128gb"
