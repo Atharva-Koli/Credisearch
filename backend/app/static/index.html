@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credisearch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ef; --surface:#ffffff; --ink:#16150f; --muted:#6c6a61; --line:#e3dfd5;
+  --accent:#16150f; --good:#1f7a4d; --good-bg:#e3f2e9; --fair:#5b5a52; --fair-bg:#eeece6;
+  --bad:#b23b2a; --bad-bg:#f8e4df; --warn:#9a6400; --warn-bg:#fbefd5;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121210; --surface:#1b1b18; --ink:#f1efe8; --muted:#9b998f; --line:#2c2b27;
+    --accent:#f1efe8; --good:#5fcf95; --good-bg:#183326; --fair:#b9b7ae; --fair-bg:#262521;
+    --bad:#ff8a75; --bad-bg:#3a1f1a; --warn:#f2bd55; --warn-bg:#352a13;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Inter Tight",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:880px;margin:0 auto;padding:48px 16px 80px}
+header .brand{font-family:"Instrument Serif",serif;font-size:56px;line-height:1;letter-spacing:-.5px;margin:0}
+header .brand i{color:var(--muted)}
+header p{color:var(--muted);margin:10px 0 28px;max-width:520px}
+form{display:flex;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 20px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+form input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:17px;outline:none}
+form button{border:0;border-radius:999px;background:var(--accent);color:var(--bg);font:600 15px "Inter Tight",sans-serif;padding:12px 22px;cursor:pointer}
+form button:disabled{opacity:.5;cursor:wait}
+.opts{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin:14px 4px 0;color:var(--muted);font-size:14px}
+.opts label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:999px;padding:4px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chip:hover{color:var(--ink);border-color:var(--muted)}
+#status{margin:32px 4px 12px;color:var(--muted);font-size:14px;min-height:21px}
+#status.err{color:var(--bad)}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:14px}
+.group.acc{opacity:.7}
+.ghead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.gname{font-weight:600;font-size:16px;margin:0}
+.gmeta{color:var(--muted);font-size:13px;margin-top:2px}
+.best{text-align:right;flex-shrink:0}
+.best .p{font:500 22px "IBM Plex Mono",monospace;letter-spacing:-.5px}
+.best a{font-size:13px;color:var(--good);text-decoration:none;font-weight:600}
+.strip{position:relative;height:28px;margin:18px 6px 4px}
+.strip .track{position:absolute;left:0;right:0;top:13px;height:2px;background:var(--line);border-radius:2px}
+.strip .med{position:absolute;top:4px;width:2px;height:20px;background:var(--muted);transform:translateX(-1px)}
+.strip .dot{position:absolute;top:8px;width:12px;height:12px;border-radius:50%;transform:translateX(-6px);border:2px solid var(--surface)}
+.scale{display:flex;justify-content:space-between;font:12px "IBM Plex Mono",monospace;color:var(--muted);margin:0 0 6px}
+details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:8px;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary:before{content:"+ "}
+details[open] summary:before{content:"− "}
+.offers{margin-top:10px;border-top:1px solid var(--line)}
+.offer{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.offer:last-child{border-bottom:0}
+.offer a{color:var(--ink);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.offer a:hover{text-decoration:underline}
+.offer .src{color:var(--muted);font-size:12px}
+.offer .pr{font:500 14px "IBM Plex Mono",monospace;text-align:right}
+.offer .pct{display:block;font-size:11px;color:var(--muted)}
+.badge{font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.b-great_deal{background:var(--good-bg);color:var(--good)} .dot.b-great_deal{background:var(--good)}
+.b-fair{background:var(--fair-bg);color:var(--fair)} .dot.b-fair{background:var(--fair)}
+.b-overpriced{background:var(--bad-bg);color:var(--bad)} .dot.b-overpriced{background:var(--bad)}
+.b-suspicious{background:var(--warn-bg);color:var(--warn)} .dot.b-suspicious{background:var(--warn)}
+.b-no_comparison{background:var(--fair-bg);color:var(--muted)} .dot.b-no_comparison{background:var(--muted)}
+.how{margin-top:56px;border-top:1px solid var(--line);padding-top:28px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.how h3{font-family:"Instrument Serif",serif;font-weight:400;font-size:24px;margin:0 0 6px}
+.how p{color:var(--muted);font-size:14px;margin:0}
+.skel{height:132px;border-radius:var(--radius);background:linear-gradient(90deg,var(--surface),var(--line),var(--surface));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:14px;border:1px solid var(--line)}
+@keyframes sh{to{background-position:-200% 0}}
+footer{margin-top:40px;color:var(--muted);font-size:13px}
+footer a{color:inherit}
+@media (max-width:640px){
+  header .brand{font-size:42px}
+  .how{grid-template-columns:1fr}
+  .ghead{flex-direction:column}
+  .best{text-align:left}
+  .offer{grid-template-columns:1fr auto}
+  .offer > div:first-child{grid-column:1 / -1}
+  .offer a{white-space:normal}
+  .offer .badge{justify-self:start}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="brand">Credi<i>search</i></h1>
+    <p>Search a product once. We pull prices from multiple sources, group identical listings with ML, and tell you which offers are real deals and which look too good to be true.</p>
+  </header>
+
+  <form id="f">
+    <input id="q" name="q" placeholder="e.g. iPhone 15 128GB" autocomplete="off" required minlength="2">
+    <button id="go" type="submit">Search</button>
+  </form>
+  <div class="opts">
+    <label><input type="checkbox" id="hideAcc" checked> Hide accessories</label>
+    <div class="chips">
+      <button class="chip" data-q="iPhone 15 128GB">iPhone 15</button>
+      <button class="chip" data-q="Sony WH-1000XM5">Sony XM5</button>
+      <button class="chip" data-q="Samsung Galaxy S24">Galaxy S24</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+
+  <section class="how">
+    <div><h3>1 · Match</h3><p>Each title becomes a TF-IDF vector of character n-grams. Listings with high cosine similarity are clustered as one product; storage size and variant words (Pro, Max) act as hard guards.</p></div>
+    <div><h3>2 · Price</h3><p>Within each product group, the median is the fair price and the median absolute deviation measures spread, so one fake listing can't skew it.</p></div>
+    <div><h3>3 · Judge</h3><p>Every offer gets a 0–100 deal score and a label: great deal, fair, overpriced, or suspicious when it's far too cheap to trust.</p></div>
+  </section>
+
+  <footer>API docs at <a href="/docs">/docs</a></footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LABELS = {great_deal:"Great deal", fair:"Fair", overpriced:"Overpriced", suspicious:"Suspicious", no_comparison:"Single offer"};
+const inr = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function strip(g, offers){
+  const lo = g.min_price, hi = g.max_price, span = (hi - lo) || 1;
+  const pos = p => (hi === lo ? 50 : ((p - lo) / span) * 100);
+  const dots = offers.map(o => `<span class="dot b-${o.deal_label}" style="left:${pos(o.price)}%" title="${esc(inr(o.price))} · ${LABELS[o.deal_label]}"></span>`).join("");
+  return `<div class="strip"><div class="track"></div><div class="med" style="left:${pos(g.median_price)}%" title="Fair price ${inr(g.median_price)}"></div>${dots}</div>
+  <div class="scale"><span>${inr(lo)}</span><span>fair ${inr(g.median_price)}</span><span>${inr(hi)}</span></div>`;
+}
+
+function render(data){
+  const byGroup = {};
+  for (const o of data.results) (byGroup[o.group_id] ||= []).push(o);
+  const groups = data.groups.filter(g => byGroup[g.group_id]);
+  if (!groups.length){ $("#status").textContent = "No results. Try a more specific product name."; $("#results").innerHTML=""; return; }
+
+  const failed = data.sources_failed.length ? ` · ${data.sources_failed.join(", ")} unavailable` : "";
+  $("#status").textContent = `${data.results.length} offers grouped into ${groups.length} product${groups.length>1?"s":""} · sources: ${data.sources_ok.join(", ")}${failed}`;
+
+  $("#results").innerHTML = groups.map(g => {
+    const offers = byGroup[g.group_id].sort((a,b) => a.price - b.price);
+    const sus = g.suspicious_offers ? ` · <span style="color:var(--warn)">${g.suspicious_offers} suspicious</span>` : "";
+    return `<article class="group${g.is_accessory?" acc":""}">
+      <div class="ghead">
+        <div><h2 class="gname">${esc(g.name)}</h2>
+          <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${g.is_accessory?" · accessory":""}${sus}</div></div>
+        <div class="best"><div class="p">${inr(g.best_offer_price)}</div>
+          <a href="${esc(g.best_offer_url)}" target="_blank" rel="noopener">Best trusted offer →</a></div>
+      </div>
+      ${g.offers > 1 ? strip(g, offers) : ""}
+      <details${groups.length===1?" open":""}><summary>See all offers</summary><div class="offers">
+        ${offers.map(o => `<div class="offer">
+          <div style="min-width:0"><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a><div class="src">${esc(o.source)}${o.deal_score!=null?` · score ${o.deal_score}/100`:""}</div></div>
+          <span class="badge b-${o.deal_label}">${LABELS[o.deal_label]}</span>
+          <div class="pr">${inr(o.price)}${o.vs_fair_pct!=null?`<span class="pct">${o.vs_fair_pct>0?"+":""}${o.vs_fair_pct}% vs fair</span>`:""}</div>
+        </div>`).join("")}
+      </div></details>
+    </article>`;
+  }).join("");
+}
+
+async function run(q){
+  $("#q").value = q;
+  $("#go").disabled = true;
+  $("#status").className = ""; $("#status").textContent = "Searching and analysing…";
+  $("#results").innerHTML = '<div class="skel"></div><div class="skel"></div>';
+  try{
+    const params = new URLSearchParams({q, limit: 40, hide_accessories: $("#hideAcc").checked});
+    const r = await fetch("/search?" + params);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail ? (typeof data.detail === "string" ? data.detail : "Invalid query") : r.statusText);
+    render(data);
+    history.replaceState(null, "", "?q=" + encodeURIComponent(q));
+  }catch(e){
+    $("#status").className = "err"; $("#status").textContent = "Search failed: " + e.message;
+    $("#results").innerHTML = "";
+  }finally{ $("#go").disabled = false; }
+}
+
+$("#f").addEventListener("submit", e => { e.preventDefault(); run($("#q").value.trim()); });
+document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => run(c.dataset.q)));
+$("#hideAcc").addEventListener("change", () => { if ($("#q").value.trim()) run($("#q").value.trim()); });
+const initial = new URLSearchParams(location.search).get("q");
+if (initial) run(initial);
+</script>
+</body>
+</html>
