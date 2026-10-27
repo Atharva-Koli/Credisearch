@@ -106,3 +106,11 @@ def test_circuit_breaker_on_error_message():
     assert not sh.is_available("msg")
     sh.record_failure("cfg", RuntimeError("SERPER_API_KEY is not configured"))
     assert sh.is_available("cfg")
+
+
+def test_plus_sign_is_a_variant():
+    assert cluster_titles([
+        "Samsung Galaxy S24+ 256GB",
+        "Samsung Galaxy S24 Plus 256GB Onyx Black",
+        "Samsung Galaxy S24 256GB",
+    ]) == [0, 0, 1]
