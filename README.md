@@ -3,7 +3,9 @@ Your own search agent and price matcher.
 
 **Live:** https://credisearchvercel.vercel.app (UI) · [/docs](https://credisearchvercel.vercel.app/docs) (API)
 
-Search a product once. Credisearch pulls prices from multiple sources (SerpAPI + Serper.dev Google Shopping; SearchAPI as fallback), **groups identical listings with ML**, and tells you which offers are real deals and which look too good to be true.
+Search a product once. Credisearch pulls prices from multiple sources (SerpAPI, Serper.dev and SearchAPI Google Shopping; any source that runs out of credits is skipped automatically), **groups identical listings with ML**, and tells you which offers are real deals and which look too good to be true.
+
+📘 **Docs:** [ML.md](ML.md) explains the ML in full · [DEV.md](DEV.md) is the developer reference (setup, env vars, deploy, troubleshooting)
 
 ## ML layer (`backend/app/services/ml/`)
 
@@ -25,7 +27,7 @@ Pure Python, with no numpy or torch, so the Vercel function stays tiny and cold 
 ```bash
 cd backend
 pip install -r requirements.txt
-echo "SERPAPI_KEY=...\nSERPER_API_KEY=..." > .env
+cp .env.example .env              # then add your keys
 uvicorn app.main:app --reload     # UI at http://localhost:8000
 python -m pytest tests -q         # ML tests
 ```
@@ -34,4 +36,4 @@ python -m pytest tests -q         # ML tests
 `GET /search?q=iphone 15&limit=10&hide_accessories=true` returns `results` (offers with `group_id`, `deal_label`, `deal_score`, `vs_fair_pct`), `groups` (one per product with min/median/max and the best trusted offer), and `sources_ok` / `sources_failed`. If one source is down, the search still works with the other.
 
 ## Deployment
-Vercel, root directory `backend`. Environment variables: `SERPAPI_KEY`, `SERPER_API_KEY` (and optionally `SEARCHAPI_KEY`, used only when no Serper key is set). Any source without a key is skipped.
+Vercel, root directory `backend`. Environment variables: `SERPAPI_KEY`, `SERPER_API_KEY`, `SEARCHAPI_KEY` (all optional, at least one needed). See `backend/.env.example` and DEV.md.

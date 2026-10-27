@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class PriceItem(BaseModel):
@@ -40,3 +40,4 @@ class SearchResponse(BaseModel):
     groups: List[ProductGroup] = []
     sources_ok: List[str] = []
     sources_failed: List[str] = []
+    sources_disabled: Dict[str, str] = {}   # source -> reason, skipped by circuit breaker

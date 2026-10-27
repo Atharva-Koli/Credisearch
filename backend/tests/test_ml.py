@@ -83,3 +83,26 @@ def test_display_name_brackets():
     from app.services.ml.matcher import display_name
     assert display_name("Apple iPhone 15 (128 GB, Black)") == "Apple iPhone 15 (128 GB)"
     assert display_name("Apple iPhone 15 (128 GB) - Black") == "Apple iPhone 15 (128 GB)"
+
+
+def test_circuit_breaker_disables_source_on_quota_error():
+    import httpx
+    from app.services import source_health as sh
+    req = httpx.Request("GET", "https://x")
+    quota = httpx.HTTPStatusError("quota", request=req, response=httpx.Response(429, request=req))
+    sh.record_failure("demo", quota)
+    assert not sh.is_available("demo")
+    assert sh.disabled_sources()["demo"] == "HTTP 429"
+    # a timeout / 500 must NOT disable a source
+    sh.record_failure("other", httpx.ReadTimeout("slow"))
+    server = httpx.HTTPStatusError("boom", request=req, response=httpx.Response(500, request=req))
+    sh.record_failure("other", server)
+    assert sh.is_available("other")
+
+
+def test_circuit_breaker_on_error_message():
+    from app.services import source_health as sh
+    sh.record_failure("msg", RuntimeError("searchapi error: You have run out of credits"))
+    assert not sh.is_available("msg")
+    sh.record_failure("cfg", RuntimeError("SERPER_API_KEY is not configured"))
+    assert sh.is_available("cfg")
