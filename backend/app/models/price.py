@@ -8,6 +8,7 @@ class PriceItem(BaseModel):
     price: float
     currency: str
     url: str
+    image: Optional[str] = None           # product thumbnail URL from the source
 
     # ---- ML enrichment (filled by app.services.ml) ----
     group_id: Optional[str] = None
@@ -27,6 +28,7 @@ class ProductGroup(BaseModel):
     median_price: float
     max_price: float
     best_offer_url: str
+    image: Optional[str] = None             # thumbnail of the best offer (or any offer)
     best_offer_price: float
     is_accessory: bool                       # True = not the product itself (hidden by hide_accessories)
     excluded_reason: Optional[str] = None    # accessory | spare part | add-on | price outlier

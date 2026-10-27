@@ -150,6 +150,7 @@ Text similarity has a blind spot. `iPhone 15 128GB` and `iPhone 15 Pro 128GB` sh
 | **Model numbers** must overlap (if both have them) | Bare numbers not followed by a unit | iPhone 15 ↔ iPhone 14 |
 | **Model codes** must overlap (if both have them) | Tokens mixing letters and digits, excluding sizes and "5g" | Galaxy S24 ↔ S23, Sony XM5 ↔ XM4, OnePlus 12 ↔ 12R |
 | **Condition** must match | `USED_WORDS`: refurbished, renewed, used, pre-owned, open box, Cashify… | New ↔ refurbished |
+| **Kind** must match | Accessory/part words present or not (`ACCESSORY_WORDS ∪ PART_WORDS`) | "Reno 15 Pro Mini" ↔ "Reno 15 Pro Mini Display Combo" (identical first 5 words!) |
 
 **Model-code bonus:** if two titles share an exact model code (both say `wh1000xm5`), the similarity threshold drops by 0.2 (`MODEL_CODE_BONUS`) to 0.35. A matching model code is strong evidence of identity, so looser wording around it is fine ("Wireless Headphones" vs "Noise Cancelling Headphones").
 
@@ -186,6 +187,10 @@ Each flagged group gets `excluded_reason` (accessory / spare part / add-on / pri
 **Relevance tiers:** every group is compared with the *query* (`_mismatch`): `exact` (what you searched), `variant` (an extra or missing variant word, or different storage: the Pro Mini, or the plain Reno15 when you searched Reno15 Pro), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
 
 **Glued model numbers:** "Reno15" and "iPhone15" have their generation number extracted, so "Reno15 Pro" vs "Reno 14 Pro" is correctly treated as different models.
+
+### 3.6c Product images
+
+Each source returns a thumbnail (`thumbnail` in SerpAPI/SearchAPI, `imageUrl` in Serper). It's kept on every offer (`PriceItem.image`), and each group shows the best offer's image. Because colours are merged into one product for pricing, the per-offer thumbnails are how the user sees which colour each price is for. Images aren't used by the ML.
 
 ### 3.7 Step 7: Naming each group (`display_name`)
 

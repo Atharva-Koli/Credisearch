@@ -121,6 +121,8 @@ def extract_attributes(title: str) -> Dict[str, Set[str]]:
         "storage": storage,
         "variants": words & VARIANT_WORDS,
         "used": bool(words & USED_WORDS) or "pre owned" in t or "open box" in t,
+        # accessory/part words present? (query-independent; a phone never merges with its case)
+        "addon": bool(words & (ACCESSORY_WORDS | PART_WORDS)),
         "model_nums": model_nums,
         "model_codes": model_codes,
     }
@@ -242,6 +244,8 @@ def compatible(a: Dict[str, Set[str]], b: Dict[str, Set[str]]) -> bool:
     if a["variants"] != b["variants"]:
         return False
     if a["used"] != b["used"]:
+        return False
+    if a["addon"] != b["addon"]:
         return False
     if a["storage"] and b["storage"] and a["storage"] != b["storage"]:
         return False

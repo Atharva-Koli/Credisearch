@@ -80,6 +80,12 @@ details[open] summary:before{content:"− "}
 .skel{height:132px;border-radius:var(--radius);background:linear-gradient(90deg,var(--surface),var(--line),var(--surface));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:14px;border:1px solid var(--line)}
 @keyframes sh{to{background-position:-200% 0}}
 footer{margin-top:40px;color:var(--muted);font-size:13px}
+.gtitle{display:flex;gap:14px;align-items:flex-start;min-width:0}
+.thumb{background:#fff;border-radius:10px;object-fit:contain;flex-shrink:0;border:1px solid var(--line)}
+.thumb.g{width:72px;height:72px;padding:4px}
+.thumb.o{width:44px;height:44px;padding:2px;border-radius:8px}
+.thumb.o:hover{transform:scale(2.6);transform-origin:left center;position:relative;z-index:5;box-shadow:0 6px 24px rgba(0,0,0,.35);transition:transform .15s}
+.offer .otitle{display:flex;gap:10px;align-items:center;min-width:0}
 .hist{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .hist svg{width:180px;height:40px;flex-shrink:0}
 .hist .htxt{font-size:13px;color:var(--muted)}
@@ -89,6 +95,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
 .rel{font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 footer a{color:inherit}
 @media (max-width:640px){
+  .thumb.g{width:56px;height:56px}
   header .brand{font-size:42px}
   header .logo{width:42px;height:42px;border-radius:11px}
   .how{grid-template-columns:1fr}
@@ -155,8 +162,8 @@ function card(g, offers, open){
   const rel = (g.relevance === "variant" && !g.is_accessory) ? '<span class="rel">variant</span>' : "";
   return `<article class="group${g.is_accessory?" acc":""}" data-key="${esc(g.history_key||"")}">
     <div class="ghead">
-      <div><h2 class="gname">${esc(g.name)}${rel}</h2>
-        <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${excl}${g.is_refurbished?' · <span style="color:var(--warn)">refurbished / used</span>':""}${sus}</div></div>
+      <div class="gtitle">${g.image?`<img class="thumb g" src="${esc(g.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:""}<div style="min-width:0"><h2 class="gname">${esc(g.name)}${rel}</h2>
+        <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${excl}${g.is_refurbished?' · <span style="color:var(--warn)">refurbished / used</span>':""}${sus}</div></div></div>
       <div class="best"><div class="p">${inr(g.best_offer_price)}</div>
         <a href="${esc(g.best_offer_url)}" target="_blank" rel="noopener">Best trusted offer →</a></div>
     </div>
@@ -164,7 +171,7 @@ function card(g, offers, open){
     <div class="histslot"></div>
     <details${open?" open":""}><summary>See all offers</summary><div class="offers">
       ${offers.map(o => `<div class="offer">
-        <div style="min-width:0"><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a><div class="src">${esc(o.source)}${o.deal_score!=null?` · score ${o.deal_score}/100`:""}</div></div>
+        <div class="otitle">${o.image?`<img class="thumb o" src="${esc(o.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:""}<div style="min-width:0"><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a><div class="src">${esc(o.source)}${o.deal_score!=null?` · score ${o.deal_score}/100`:""}</div></div></div>
         <span class="badge b-${o.deal_label}">${LABELS[o.deal_label]}</span>
         <div class="pr">${inr(o.price)}${o.vs_fair_pct!=null?`<span class="pct">${o.vs_fair_pct>0?"+":""}${o.vs_fair_pct}% vs fair</span>`:""}</div>
       </div>`).join("")}

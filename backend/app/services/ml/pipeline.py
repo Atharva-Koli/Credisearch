@@ -93,6 +93,7 @@ def analyze(items: List[PriceItem], query: str) -> Tuple[List[PriceItem], List[P
             median_price=round(median(prices), 2),
             max_price=max(prices),
             best_offer_url=best.url,
+            image=best.image or next((it.image for it in group_items if it.image), None),
             best_offer_price=best.price,
             is_accessory=excluded_reason is not None,
             excluded_reason=excluded_reason,

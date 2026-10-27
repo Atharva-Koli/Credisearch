@@ -5,6 +5,14 @@ from app.models.price import PriceItem
 USD_TO_INR = 83.0  # temporary fixed rate
 
 
+def _image(item: dict):
+    """Product thumbnail: SerpAPI/SearchAPI call it 'thumbnail', Serper 'imageUrl'."""
+    img = item.get("thumbnail") or item.get("imageUrl") or item.get("image")
+    if isinstance(img, str) and (img.startswith("https://") or img.startswith("data:image/")):
+        return img
+    return None
+
+
 def normalize_serpapi_results(data: dict, limit: int = 5):
     """
     Converts raw SerpAPI Google Shopping response into PriceItem objects.
@@ -60,6 +68,7 @@ def normalize_serpapi_results(data: dict, limit: int = 5):
                     price=float(price_inr),
                     currency="INR",
                     url=link,
+                    image=_image(item),
                 )
             )
 
@@ -114,6 +123,7 @@ def normalize_searchapi_results(data: dict, limit: int = 5):
                     price=float(price),
                     currency="INR",
                     url=link,
+                    image=_image(item),
                 )
             )
 
@@ -163,6 +173,7 @@ def normalize_serper_results(data: dict, limit: int = 5):
                     price=float(price),
                     currency="INR",
                     url=link,
+                    image=_image(item),
                 )
             )
             if len(results) >= limit:

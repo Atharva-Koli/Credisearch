@@ -256,3 +256,11 @@ def test_missing_variant_is_not_exact():
     rel = {g.name: g.relevance for g in groups}
     assert groups[0].name.startswith("OPPO Reno15 Pro")
     assert rel[groups[1].name] == "variant"
+
+
+def test_product_never_merges_with_its_part():
+    assert cluster_titles([
+        "Oppo Reno 15 Pro Mini 5G 256GB",
+        "Oppo Reno 15 Pro Mini Display and Touchscreen Combo - 100% Original",
+        "Oppo Reno 15 Pro Mini 5G (256 GB) Silver",
+    ]) == [0, 1, 0]
