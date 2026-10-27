@@ -32,6 +32,13 @@ ACCESSORY_WORDS = {
     "sticker", "back", "film", "dock", "replacement",
 }
 
+# Spare / repair parts (treated like accessories: not the product itself)
+PART_WORDS = {
+    "lcd", "digitizer", "touchscreen", "combo", "folder", "motherboard",
+    "housing", "flex", "spare", "panel", "assembly", "ic", "connector",
+    "backdoor", "earpiece",
+}
+
 # Marketing / noise words that carry no product identity
 STOPWORDS = {
     "the", "with", "and", "for", "new", "latest", "buy", "online", "best",
@@ -48,6 +55,7 @@ COLOR_WORDS = {
     "orange", "teal", "navy", "beige", "bronze", "rose", "space", "jet",
     "phantom", "onyx", "obsidian", "porcelain", "hazel", "coral", "lime",
     "marble", "cobalt", "amber", "sapphire", "emerald", "charcoal",
+    "sunset", "dusk", "aurora", "glow", "moonlight", "ocean", "forest", "sky",
 }
 
 _CONNECTIVITY = {"5g", "4g", "3g"}
@@ -81,6 +89,11 @@ def extract_attributes(title: str) -> Dict[str, Set[str]]:
     size_tokens = {s for _, s in sizes}
     # bare numbers like the "15" in "iphone 15" (model generation)
     model_nums = set(_BARE_NUM_RE.findall(t))
+    # "reno15" / "iphone15" carry the generation too: compare it with "reno 14"
+    for w in words:
+        m = re.fullmatch(r"[a-z]{3,}(\d{1,3})", w)
+        if m and w not in _CONNECTIVITY:
+            model_nums.add(m.group(1))
     # alphanumeric model codes like "s24", "wh1000xm5", "a55"
     model_codes = {
         w for w in words
@@ -95,6 +108,28 @@ def extract_attributes(title: str) -> Dict[str, Set[str]]:
         "model_nums": model_nums,
         "model_codes": model_codes,
     }
+
+
+def canonical_key(title: str) -> str:
+    """
+    Spelling-independent id for a product, used to store its price history:
+    'OPPO Reno15 Pro 5G (12GB RAM, 256GB) Gold' and 'Oppo Reno 15 Pro 256 GB'
+    both become 'oppo-reno-15-pro-256gb'.
+    """
+    attrs = extract_attributes(title)
+    out = []
+    for w in normalize(title).split():
+        if w in STOPWORDS or w in COLOR_WORDS or not re.fullmatch(r"[a-z0-9.]+", w):
+            continue
+        if _STORAGE_RE.fullmatch(w):
+            if w in attrs["storage"] and w not in out:
+                out.append(w)              # keep storage, drop RAM
+            continue
+        # split "reno15" -> "reno 15" so spacing differences don't matter
+        for part in re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", w).split():
+            if part not in out:
+                out.append(part)
+    return "-".join(out)[:80]
 
 
 def display_name(title: str) -> str:
@@ -115,11 +150,44 @@ def is_used(title: str) -> bool:
     return extract_attributes(title)["used"]
 
 
-def is_accessory(title: str, query: str) -> bool:
-    title_words = set(normalize(title).split())
+def is_english(title: str, max_foreign_ratio: float = 0.15) -> bool:
+    """False if more than 15% of the letters are outside the Latin alphabet
+    (e.g. Devanagari, Arabic, CJK). Keeps accented Latin like 'Café'."""
+    letters = [c for c in title if c.isalpha()]
+    if not letters:
+        return False
+    foreign = sum(1 for c in letters if ord(c) > 0x024F)
+    return foreign / len(letters) <= max_foreign_ratio
+
+
+def accessory_reason(title: str, query: str) -> Optional[str]:
+    """
+    Why this listing is NOT the product itself, or None if it is.
+      'accessory'  - case, cover, charger, protector...
+      'spare part' - display combo, LCD, digitizer, housing...
+      'add-on'     - "<something> for <the product you searched>"
+    Words the user actually searched for are never counted ("iphone case" shows cases).
+    """
+    t = normalize(title)
+    title_words = set(t.split())
     query_words = set(normalize(query).split())
-    hits = (title_words & ACCESSORY_WORDS) - query_words
-    return bool(hits)
+
+    if (title_words & PART_WORDS) - query_words:
+        return "spare part"
+    if (title_words & ACCESSORY_WORDS) - query_words:
+        return "accessory"
+
+    # "Display for Oppo Reno 15", "Silicone Case for iPhone 15": the words before
+    # "for" describe the item, and none of them are what the user searched for.
+    if " for " in f" {t} ":
+        before = set(t.split(" for ", 1)[0].split()) - STOPWORDS
+        if before and not (before & query_words):
+            return "add-on"
+    return None
+
+
+def is_accessory(title: str, query: str) -> bool:
+    return accessory_reason(title, query) is not None
 
 
 def _char_ngrams(text: str) -> List[str]:

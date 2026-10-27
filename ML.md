@@ -167,6 +167,23 @@ A listing is an accessory if its title contains an accessory word (case, cover, 
 - Search "iphone 15": the ₹499 case is flagged and hidden by default.
 - Search "iphone 15 case": "case" is in the query, so cases are *not* flagged.
 
+### 3.6b Step 6b: Removing outliers (non-English, parts, price outliers, other models)
+
+Real searches return junk that isn't the product. Four layers remove it:
+
+| Layer | Where | Rule | Example removed |
+|---|---|---|---|
+| **English only** | `is_english()` in matcher.py, applied in `run_search` *before* the ML | Drop a title if more than 15% of its letters are outside the Latin alphabet (accented Latin like "Café" is kept) | "Oppo Reno 15 PRO MINI 5G स्किन नॉट बैक कवर…" |
+| **Spare parts** | `accessory_reason()` → `PART_WORDS` | lcd, digitizer, touchscreen, combo, folder, motherboard, housing, flex, spare, panel, assembly… (unless searched for) | "Display … (Combo Folder) \| Maxbhi", "Display and Touchscreen Combo" |
+| **Add-ons ("X for Y")** | `accessory_reason()` | If the words *before* " for " contain nothing the user searched, the item is something *for* the product, not the product | "Battery Door for Oppo Reno 15 Pro" |
+| **Price outliers** | `_flag_price_outliers()` in pipeline.py | **Anchor** = offer-weighted median price of the relevant, new, non-accessory groups. Any group under **20%** of the anchor is flagged. This catches anything the word lists miss. | an ₹899 "shell" when the phone's anchor is ₹64,000 |
+
+Each flagged group gets `excluded_reason` (accessory / spare part / add-on / price outlier) and is hidden by "Hide accessories & parts".
+
+**Relevance tiers:** every group is compared with the *query* (`_mismatch`): `exact` (what you searched), `variant` (another variant or storage, e.g. the Pro Mini), or `other` (a different model number or code, e.g. Reno 14 when you searched Reno 15). The UI shows exact + variant and folds "other" behind a button.
+
+**Glued model numbers:** "Reno15" and "iPhone15" have their generation number extracted, so "Reno15 Pro" vs "Reno 14 Pro" is correctly treated as different models.
+
 ### 3.7 Step 7: Naming each group (`display_name`)
 
 The group is named after its median-length title, with colour words stripped and brackets rebalanced. "Apple iPhone 15 (128 GB, Black)" becomes "Apple iPhone 15 (128 GB)".
@@ -339,6 +356,10 @@ The next step toward "real" ML rigour:
 
 ---
 
+## 9b. Price history: the data pipeline for future ML
+
+`price_log.py` logs, for every relevant product group, one point per day: `{fair (median), min, max, offers, best_url}`, keyed by a **spelling-independent product key** (`canonical_key`: "OPPO Reno15 Pro 5G (12GB RAM, 256GB) Gold" → `oppo-reno-15-pro-256gb`, using the most common key in the group). Data comes from user searches plus a daily cron over tracked products. This is the dataset the "buy now or wait" model will be trained on.
+
 ## 10. Roadmap: "buy now or wait"
 
 Goal: tell the user to wait because the price is likely to drop within the next 3 months (for example in a specific sale), or to buy now.
@@ -353,7 +374,7 @@ Data options found (Oct 2026):
 
 Planned approach:
 1. **Now:** a sale-calendar model built on Indian sale seasons (year-end sales, Republic Day sales in January, festive sales in Sept–Oct, mid-year sales) and launch cycles (phones drop when the successor launches). This is rules + calendar, not trained ML, and should be described that way.
-2. **Start logging** the fair price of each product group daily.
+2. **Logging the fair price of each product group daily**: built (section 9b).
 3. **Once there's 3–6 months of data:** a time-series model (seasonal decomposition, or gradient boosting on features like days-to-next-sale and days-since-launch) to predict the probability and size of a price drop.
 
 ---

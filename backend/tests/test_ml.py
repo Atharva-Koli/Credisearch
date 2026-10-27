@@ -130,3 +130,110 @@ def test_ranking_puts_searched_model_first():
              for i, t in enumerate(titles)]
     _, groups = analyze(items, "samsung galaxy s24 256gb")
     assert "S24" in groups[0].name
+
+
+# ---------------- outlier elimination (Oppo Reno screenshot cases) ----------------
+
+def test_non_english_titles_detected():
+    from app.services.ml.matcher import is_english
+    assert is_english("OPPO Reno15 Pro 5G (12GB RAM, 256GB)")
+    assert is_english("Café Edition Phone")
+    assert not is_english("Oppo Reno 15 PRO MINI 5G स्किन नॉट बैक कवर, कैमरा और बैक प्रोटेक्टर मोबाइल स्किन")
+
+
+def test_spare_parts_and_addons_flagged():
+    from app.services.ml.matcher import accessory_reason
+    q = "oppo reno 15 pro"
+    assert accessory_reason("Display for Oppo Reno15 Pro Mini - (Combo Folder) | Maxbhi", q) == "spare part"
+    assert accessory_reason("Oppo Reno 15 Pro Mini Display and Touchscreen Combo - 100% Original", q) == "spare part"
+    assert accessory_reason("Battery Door for Oppo Reno 15 Pro", q) == "add-on"
+    assert accessory_reason("OPPO Reno15 Pro 5G (12GB RAM, 256GB)", q) is None
+    assert accessory_reason("Apple iPhone 15 for Rs 59,999", "iphone 15") is None
+
+
+def test_price_outlier_and_other_models():
+    titles_prices = [
+        ("OPPO Reno15 Pro 5G 256GB", 60859), ("OPPO Reno 15 Pro 5G (256 GB)", 67999),
+        ("Oppo Reno 15 Pro 5G 256GB Silver", 64999),
+        ("Oppo Reno 15 Pro Mini 5G 256GB", 49999),          # a variant
+        ("Oppo Reno 14 Pro 5G 256GB", 44999),               # a different model
+        ("Mystery item Oppo Reno 15 Pro shell", 899),       # slipped past word lists
+    ]
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url=f"u{i}")
+             for i, (t, p) in enumerate(titles_prices)]
+    _, groups = analyze(items, "oppo reno 15 pro")
+    by = {g.name: g for g in groups}
+    main = groups[0]
+    assert "15 Pro" in main.name and "Mini" not in main.name and main.offers == 3
+    mini = next(g for g in groups if "Mini" in g.name)
+    assert mini.relevance == "variant"
+    r14 = next(g for g in groups if "14" in g.name)
+    assert r14.relevance == "other"
+    shell = next(g for g in groups if "shell" in g.name)
+    assert shell.is_accessory and shell.excluded_reason == "price outlier"
+    assert groups[-1] is shell  # excluded groups rank last
+
+
+# ---------------- price logger with an in-memory fake Redis ----------------
+
+class FakeRedis:
+    def __init__(self):
+        self.h, self.l = {}, {}
+
+    def __call__(self, commands):
+        out = []
+        for cmd in commands:
+            op, key, *args = cmd
+            if op == "LPUSH":
+                self.l.setdefault(key, []).insert(0, args[0]); out.append(len(self.l[key]))
+            elif op == "LTRIM":
+                self.l[key] = self.l.get(key, [])[args[0]:args[1] + 1]; out.append("OK")
+            elif op == "LRANGE":
+                out.append(self.l.get(key, [])[args[0]:args[1] + 1])
+            elif op == "HSET":
+                self.h.setdefault(key, {})[args[0]] = args[1]; out.append(1)
+            elif op == "HGET":
+                out.append(self.h.get(key, {}).get(args[0]))
+            elif op == "HGETALL":
+                out.append([x for kv in self.h.get(key, {}).items() for x in kv])
+        return out
+
+
+def test_price_logger_records_daily_points(monkeypatch):
+    from app.services import price_log
+    fake = FakeRedis()
+    monkeypatch.setattr(price_log, "_pipeline", fake)
+    monkeypatch.setattr(price_log, "enabled", lambda: True)
+
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url="u")
+             for t, p in [("Apple iPhone 15 128GB", 65999), ("Apple iPhone 15 (128 GB) Blue", 69900),
+                          ("Silicone Case for iPhone 15", 499)]]
+    _, groups = analyze(items, "iphone 15")
+    price_log.log_search("iphone 15", groups, ["serpapi"])
+
+    products = price_log.list_products()
+    assert len(products) == 1                       # the case is not logged
+    key = next(iter(products))
+    hist = price_log.get_history(key)
+    assert len(hist["points"]) == 1 and hist["points"][0]["fair"] == 67949.5
+    assert price_log.recent_events(5)[0]["q"] == "iphone 15"
+
+    # simulate yesterday's point -> history grows to 2 days
+    fake.h[f"price:{key}"]["2026-01-01"] = '{"fair": 70000, "min": 69000, "max": 71000, "offers": 2, "best_url": "u"}'
+    assert [p["date"] for p in price_log.get_history(key)["points"]][0] == "2026-01-01"
+
+
+def test_glued_model_number_compared_with_spaced_one():
+    assert cluster_titles([
+        "OPPO Reno15 Pro 5G 256GB", "Oppo Reno 14 Pro 5G 256GB", "OPPO Reno 15 Pro 5G 256 GB",
+    ]) == [0, 1, 0]
+
+
+def test_history_key_is_spelling_independent():
+    from app.services.ml.matcher import canonical_key
+    keys = {canonical_key(t) for t in [
+        "OPPO Reno15 Pro 5G (12GB RAM, 256GB) Sunset Gold",
+        "OPPO Reno 15 Pro 5G 256 GB Titanium Grey",
+        "Oppo Reno15 Pro 256GB",
+    ]}
+    assert keys == {"oppo-reno-15-pro-256gb"}

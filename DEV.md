@@ -21,7 +21,8 @@ For how the ML works, see [ML.md](ML.md).
 backend/
 ├── app/
 │   ├── main.py                    # FastAPI app: "/", "/health", includes search router
-│   ├── api/routes/search.py       # GET /search: fetch sources -> ML -> response
+│   ├── api/routes/search.py       # GET /search: fetch sources -> English filter -> ML -> log -> response
+│   ├── api/routes/history.py      # GET /history, /history/{key}, /history/events/recent, /cron/log-prices
 │   ├── core/config.py             # reads API keys from env / .env
 │   ├── models/price.py            # PriceItem, ProductGroup, SearchResponse (pydantic)
 │   ├── services/
@@ -31,12 +32,14 @@ backend/
 │   │   │   └── searchapi.py       #   SearchAPI Google Shopping (GET, gl=in)
 │   │   ├── aggregator.py          # raw API JSON -> PriceItem (+ currency -> INR)
 │   │   ├── source_health.py       # circuit breaker: auto-skip dead / out-of-credit sources
+│   │   ├── price_log.py           # price event logger + history (Upstash Redis REST)
 │   │   ├── cache.py               # 5-min in-memory cache of responses
 │   │   └── ml/                    # THE ML LAYER (see ML.md)
 │   │       ├── matcher.py         #   product matching (TF-IDF + guards + clustering)
 │   │       ├── deal_scorer.py     #   fair price + deal labels (median / MAD)
 │   │       └── pipeline.py        #   glues them together, builds product groups
-│   └── static/index.html          # the UI
+│   └── static/                    # index.html (the UI), favicon-32.png, apple-touch-icon.png (logo)
+├── vercel.json                    # daily cron: /cron/log-prices at 02:30 UTC (08:00 IST)
 ├── tests/test_ml.py               # pytest tests for ML + circuit breaker
 ├── requirements.txt
 └── .env.example                   # template for your local .env
@@ -87,6 +90,27 @@ The `/search` response shows what happened:
 
 The state is in memory, so a new Vercel instance starts fresh. That costs at most one wasted failed call per cold start, and failed calls don't use credits.
 
+## 4b. Price history (event logger)
+
+Stored in **Upstash Redis** (free tier) through its REST API, so no extra Python packages are needed. If the Redis env vars are missing, logging is skipped silently and the UI hides history.
+
+**Setup (one time):** Vercel → credisearch_vercel → **Storage** → **Create / Connect** → **Upstash for Redis** (free) → connect it to this project. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically. Optionally add `CRON_SECRET` (any random string). Then redeploy.
+
+**What's logged:**
+| Redis key | Type | Content |
+|---|---|---|
+| `events` | list | Every search, newest first (capped at 5,000): time, query, sources, top products with fair/min price, origin `user` or `cron` |
+| `products` | hash | history key → product name |
+| `price:<key>` | hash | `YYYY-MM-DD` → `{fair, min, max, offers, best_url}`; one point per product per day |
+
+**Where the data comes from:**
+1. Every user search, at no extra API cost.
+2. **A daily cron** (`vercel.json`, 08:00 IST) that searches `TRACKED_PRODUCTS` (defaults in `history.py`) using **Serper only**, so it doesn't use SerpAPI's 250/month. About 5 credits a day, roughly 150 a month.
+
+The history key is spelling-independent (`canonical_key` in `matcher.py`), so "Reno15 Pro" and "Reno 15 Pro" share one history.
+
+**Endpoints:** `/history` (all products), `/history/{key}` (points + summary), `/history/events/recent?limit=50` (event log). Test the cron by hand: `curl -H "Authorization: Bearer $CRON_SECRET" https://credisearchvercel.vercel.app/cron/log-prices`
+
 ## 5. Deploy
 
 Vercel is connected to this GitHub repo, so **deploying = pushing to `main`**.
@@ -128,6 +152,8 @@ Example: `/search?q=iphone 15 128gb&limit=20&hide_accessories=true`
 | Env var added but nothing changed | No redeploy | Deployments → ⋯ → Redeploy |
 | Same product split into many groups | Matching threshold too strict for that wording | Tune `SIMILARITY_THRESHOLD` in `ml/matcher.py` (see ML.md §6) |
 | Different products merged | A guard is missing (new variant word) | Add the word to `VARIANT_WORDS` in `ml/matcher.py` and add a test |
+| A part/accessory still shows | Word not in the lists and priced above 20% of the product | Add the word to `PART_WORDS` / `ACCESSORY_WORDS` in `matcher.py` |
+| No history line in the UI | Redis not connected, or only 1 day of data so far | Check `/history`; connect Upstash (section 4b) |
 
 ## 8. Changing things safely
 
@@ -139,4 +165,4 @@ Example: `/search?q=iphone 15 128gb&limit=20&hide_accessories=true`
 
 - The cache is in memory: it is per serverless instance and lost on a cold start.
 - The USD→INR rate is fixed at 83 (`aggregator.py`).
-- No price history yet. See the roadmap in ML.md.
+- History needs time: the trend line appears after 2+ days of data.

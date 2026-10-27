@@ -1,4 +1,5 @@
 import logging
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -14,7 +15,8 @@ from app.services.aggregator import (
     normalize_serper_results,
 )
 from app.services.ml import analyze
-from app.services import source_health
+from app.services.ml.matcher import is_english
+from app.services import price_log, source_health
 
 logger = logging.getLogger("credisearch")
 
@@ -23,12 +25,13 @@ router = APIRouter(prefix="/search", tags=["search"])
 FETCH_PER_SOURCE = 20
 
 
-def active_sources():
+def active_sources(only: Optional[List[str]] = None):
     """
     Price sources as (name, fetch, normalize).
     A source runs only if its key is set AND it hasn't been switched off by the
     circuit breaker (out of credits / bad key -> skipped for 6 hours).
     Remove a key from the environment to retire a source for good.
+    `only` restricts to the named sources (used by the daily cron to save credits).
     """
     sources = []
     if SERPAPI_KEY:
@@ -37,30 +40,17 @@ def active_sources():
         sources.append(("serper", serper_search, normalize_serper_results))
     if SEARCHAPI_KEY:
         sources.append(("searchapi", searchapi_search, normalize_searchapi_results))
-    return [s for s in sources if source_health.is_available(s[0])]
+    sources = [s for s in sources if source_health.is_available(s[0])]
+    if only:
+        sources = [s for s in sources if s[0] in only]
+    return sources
 
 
-@router.get("", response_model=SearchResponse)
-def search_prices(
-    q: str = Query(..., min_length=2, description="Product name"),
-    country: str = Query("IN", description="Country code"),
-    limit: int = Query(10, ge=1, le=40, description="Max offers returned"),
-    hide_accessories: bool = Query(False, description="Drop cases, chargers, etc."),
-):
-    # -------- CACHE CHECK --------
-    cache_key = f"{q.lower().strip()}:{country}:{limit}:{hide_accessories}"
-    cached_response = get_cache(cache_key)
-    if cached_response:
-        return cached_response
-
-    sources = active_sources()
-    if not sources:
-        raise HTTPException(
-            status_code=503,
-            detail="No price source available: keys missing, or all sources are out of credits.",
-        )
-
-    # -------- FETCH (each source independently; one failing must not kill the search) --------
+def run_search(q: str, country: str, sources, origin: str = "user"):
+    """
+    Fetch every source, keep English listings, run the ML, log prices.
+    Returns (enriched_items, groups, sources_ok, sources_failed, dropped_non_english).
+    """
     sources_ok, sources_failed, all_items = [], [], []
     for name, fetch, normalize in sources:
         try:
@@ -81,8 +71,36 @@ def search_prices(
             detail="All price sources failed. Check API keys and remaining credits.",
         )
 
-    # -------- ML: product matching + deal scoring --------
-    enriched, groups = analyze(all_items, q)
+    # English listings only (drops Hindi/other-script titles before the ML sees them)
+    english = [it for it in all_items if is_english(it.title)]
+    dropped = len(all_items) - len(english)
+
+    enriched, groups = analyze(english, q)
+    price_log.log_search(q, groups, sources_ok, origin=origin)
+    return enriched, groups, sources_ok, sources_failed, dropped
+
+
+@router.get("", response_model=SearchResponse)
+def search_prices(
+    q: str = Query(..., min_length=2, description="Product name"),
+    country: str = Query("IN", description="Country code"),
+    limit: int = Query(10, ge=1, le=40, description="Max offers returned"),
+    hide_accessories: bool = Query(False, description="Drop accessories, spare parts and price outliers"),
+):
+    # -------- CACHE CHECK --------
+    cache_key = f"{q.lower().strip()}:{country}:{limit}:{hide_accessories}"
+    cached_response = get_cache(cache_key)
+    if cached_response:
+        return cached_response
+
+    sources = active_sources()
+    if not sources:
+        raise HTTPException(
+            status_code=503,
+            detail="No price source available: keys missing, or all sources are out of credits.",
+        )
+
+    enriched, groups, sources_ok, sources_failed, dropped = run_search(q, country, sources)
 
     if hide_accessories:
         enriched = [it for it in enriched if not it.is_accessory]
@@ -98,6 +116,8 @@ def search_prices(
         sources_ok=sources_ok,
         sources_failed=sources_failed,
         sources_disabled=source_health.disabled_sources(),
+        dropped_non_english=dropped,
+        history_enabled=price_log.enabled(),
     )
 
     # -------- CACHE STORE --------

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Credisearch</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#050833">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -26,6 +29,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Inter Tight",
 .wrap{max-width:880px;margin:0 auto;padding:48px 16px 80px}
 header .brand{font-family:"Instrument Serif",serif;font-size:56px;line-height:1;letter-spacing:-.5px;margin:0}
 header .brand i{color:var(--muted)}
+header .brand{display:flex;align-items:center;gap:14px}
+header .logo{width:52px;height:52px;border-radius:14px;flex-shrink:0}
 header p{color:var(--muted);margin:10px 0 28px;max-width:520px}
 form{display:flex;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 20px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
 form input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:17px;outline:none}
@@ -75,9 +80,17 @@ details[open] summary:before{content:"− "}
 .skel{height:132px;border-radius:var(--radius);background:linear-gradient(90deg,var(--surface),var(--line),var(--surface));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:14px;border:1px solid var(--line)}
 @keyframes sh{to{background-position:-200% 0}}
 footer{margin-top:40px;color:var(--muted);font-size:13px}
+.hist{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.hist svg{width:180px;height:40px;flex-shrink:0}
+.hist .htxt{font-size:13px;color:var(--muted)}
+.hist .htxt b{color:var(--ink);font-weight:600}
+.others-toggle{display:block;width:100%;margin:6px 0 14px;padding:12px;border:1px dashed var(--line);border-radius:var(--radius);background:transparent;color:var(--muted);font:inherit;font-size:14px;cursor:pointer}
+.others-toggle:hover{color:var(--ink);border-color:var(--muted)}
+.rel{font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 footer a{color:inherit}
 @media (max-width:640px){
   header .brand{font-size:42px}
+  header .logo{width:42px;height:42px;border-radius:11px}
   .how{grid-template-columns:1fr}
   .ghead{flex-direction:column}
   .best{text-align:left}
@@ -91,7 +104,7 @@ footer a{color:inherit}
 <body>
 <div class="wrap">
   <header>
-    <h1 class="brand">Credi<i>search</i></h1>
+    <h1 class="brand"><img class="logo" src="/apple-touch-icon.png" alt="" width="52" height="52">Credi<i>search</i></h1>
     <p>Search a product once. We pull prices from multiple sources, group identical listings with ML, and tell you which offers are real deals and which look too good to be true.</p>
   </header>
 
@@ -100,7 +113,7 @@ footer a{color:inherit}
     <button id="go" type="submit">Search</button>
   </form>
   <div class="opts">
-    <label><input type="checkbox" id="hideAcc" checked> Hide accessories</label>
+    <label><input type="checkbox" id="hideAcc" checked> Hide accessories &amp; parts</label>
     <div class="chips">
       <button class="chip" data-q="iPhone 15 128GB">iPhone 15</button>
       <button class="chip" data-q="Sony WH-1000XM5">Sony XM5</button>
@@ -114,7 +127,7 @@ footer a{color:inherit}
   <section class="how">
     <div><h3>1 · Match</h3><p>Each title becomes a TF-IDF vector of character n-grams. Listings with high cosine similarity are clustered as one product; storage size and variant words (Pro, Max) act as hard guards.</p></div>
     <div><h3>2 · Price</h3><p>Within each product group, the median is the fair price and the median absolute deviation measures spread, so one fake listing can't skew it.</p></div>
-    <div><h3>3 · Judge</h3><p>Every offer gets a 0–100 deal score and a label: great deal, fair, overpriced, or suspicious when it's far too cheap to trust.</p></div>
+    <div><h3>3 · Judge</h3><p>Every offer gets a 0–100 deal score and a label: great deal, fair, overpriced, or suspicious when it's far too cheap to trust. Accessories, spare parts and price outliers are filtered out, and prices are logged daily to build a history.</p></div>
   </section>
 
   <footer>API docs at <a href="/docs">/docs</a></footer>
@@ -134,35 +147,79 @@ function strip(g, offers){
   <div class="scale"><span>${inr(lo)}</span><span>fair ${inr(g.median_price)}</span><span>${inr(hi)}</span></div>`;
 }
 
+const REASONS = {"accessory":"accessory", "spare part":"spare part", "add-on":"accessory", "price outlier":"price outlier, likely accessory or part"};
+
+function card(g, offers, open){
+  const sus = g.suspicious_offers ? ` · <span style="color:var(--warn)">${g.suspicious_offers} suspicious</span>` : "";
+  const excl = g.is_accessory ? ` · ${REASONS[g.excluded_reason] || "accessory"}` : "";
+  const rel = (g.relevance === "variant" && !g.is_accessory) ? '<span class="rel">variant</span>' : "";
+  return `<article class="group${g.is_accessory?" acc":""}" data-key="${esc(g.history_key||"")}">
+    <div class="ghead">
+      <div><h2 class="gname">${esc(g.name)}${rel}</h2>
+        <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${excl}${g.is_refurbished?' · <span style="color:var(--warn)">refurbished / used</span>':""}${sus}</div></div>
+      <div class="best"><div class="p">${inr(g.best_offer_price)}</div>
+        <a href="${esc(g.best_offer_url)}" target="_blank" rel="noopener">Best trusted offer →</a></div>
+    </div>
+    ${g.offers > 1 ? strip(g, offers) : ""}
+    <div class="histslot"></div>
+    <details${open?" open":""}><summary>See all offers</summary><div class="offers">
+      ${offers.map(o => `<div class="offer">
+        <div style="min-width:0"><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a><div class="src">${esc(o.source)}${o.deal_score!=null?` · score ${o.deal_score}/100`:""}</div></div>
+        <span class="badge b-${o.deal_label}">${LABELS[o.deal_label]}</span>
+        <div class="pr">${inr(o.price)}${o.vs_fair_pct!=null?`<span class="pct">${o.vs_fair_pct>0?"+":""}${o.vs_fair_pct}% vs fair</span>`:""}</div>
+      </div>`).join("")}
+    </div></details>
+  </article>`;
+}
+
+function sparkline(points){
+  const vals = points.map(p => p.fair), lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+  const W = 180, H = 40, P = 4;
+  const xy = vals.map((v,i) => [P + (i/(vals.length-1))*(W-2*P), H-P - ((v-lo)/span)*(H-2*P)]);
+  const d = xy.map((p,i) => (i?"L":"M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const last = xy[xy.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" aria-label="Fair price history"><path d="${d}" fill="none" stroke="var(--good)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3" fill="var(--good)"/></svg>`;
+}
+
+async function loadHistory(el){
+  const key = el.dataset.key; if (!key) return;
+  try{
+    const h = await fetch("/history/" + encodeURIComponent(key)).then(r => r.ok ? r.json() : null);
+    if (!h || !h.points || !h.points.length) return;
+    const s = h.summary, slot = el.querySelector(".histslot");
+    if (h.points.length < 2){
+      slot.innerHTML = `<div class="hist"><div class="htxt">📈 Price tracking started ${s.first_date}. A trend appears after a few days.</div></div>`;
+      return;
+    }
+    slot.innerHTML = `<div class="hist">${sparkline(h.points)}<div class="htxt">Fair price over <b>${s.days_tracked} days</b> · lowest seen <b>${inr(s.lowest_min)}</b> on ${s.lowest_date}</div></div>`;
+  }catch(e){}
+}
+
 function render(data){
   const byGroup = {};
   for (const o of data.results) (byGroup[o.group_id] ||= []).push(o);
   const groups = data.groups.filter(g => byGroup[g.group_id]);
   if (!groups.length){ $("#status").textContent = "No results. Try a more specific product name."; $("#results").innerHTML=""; return; }
 
-  const failed = data.sources_failed.length ? ` · ${data.sources_failed.join(", ")} unavailable` : "";
-  $("#status").textContent = `${data.results.length} offers grouped into ${groups.length} product${groups.length>1?"s":""} · sources: ${data.sources_ok.join(", ")}${failed}`;
+  const main = groups.filter(g => g.relevance !== "other");
+  const others = groups.filter(g => g.relevance === "other");
+  const shown = main.length ? main : others;
+  const hidden = main.length ? others : [];
 
-  $("#results").innerHTML = groups.map(g => {
-    const offers = byGroup[g.group_id].sort((a,b) => a.price - b.price);
-    const sus = g.suspicious_offers ? ` · <span style="color:var(--warn)">${g.suspicious_offers} suspicious</span>` : "";
-    return `<article class="group${g.is_accessory?" acc":""}">
-      <div class="ghead">
-        <div><h2 class="gname">${esc(g.name)}</h2>
-          <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${g.is_accessory?" · accessory":""}${g.is_refurbished?' · <span style="color:var(--warn)">refurbished / used</span>':""}${sus}</div></div>
-        <div class="best"><div class="p">${inr(g.best_offer_price)}</div>
-          <a href="${esc(g.best_offer_url)}" target="_blank" rel="noopener">Best trusted offer →</a></div>
-      </div>
-      ${g.offers > 1 ? strip(g, offers) : ""}
-      <details${groups.length===1?" open":""}><summary>See all offers</summary><div class="offers">
-        ${offers.map(o => `<div class="offer">
-          <div style="min-width:0"><a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a><div class="src">${esc(o.source)}${o.deal_score!=null?` · score ${o.deal_score}/100`:""}</div></div>
-          <span class="badge b-${o.deal_label}">${LABELS[o.deal_label]}</span>
-          <div class="pr">${inr(o.price)}${o.vs_fair_pct!=null?`<span class="pct">${o.vs_fair_pct>0?"+":""}${o.vs_fair_pct}% vs fair</span>`:""}</div>
-        </div>`).join("")}
-      </div></details>
-    </article>`;
-  }).join("");
+  const failed = data.sources_failed.length ? ` · ${data.sources_failed.join(", ")} unavailable` : "";
+  const dropped = data.dropped_non_english ? ` · ${data.dropped_non_english} non-English listings removed` : "";
+  $("#status").textContent = `${data.results.length} offers grouped into ${groups.length} product${groups.length>1?"s":""} · sources: ${data.sources_ok.join(", ")}${failed}${dropped}`;
+
+  const sortOffers = g => byGroup[g.group_id].sort((a,b) => a.price - b.price);
+  let html = shown.map((g,i) => card(g, sortOffers(g), shown.length===1)).join("");
+  if (hidden.length){
+    html += `<button class="others-toggle" id="othersBtn">Show ${hidden.length} other model${hidden.length>1?"s":""} found in the results</button><div id="others" hidden>${hidden.map(g => card(g, sortOffers(g), false)).join("")}</div>`;
+  }
+  $("#results").innerHTML = html;
+  const btn = $("#othersBtn");
+  if (btn) btn.addEventListener("click", () => { $("#others").hidden = false; btn.remove(); });
+
+  if (data.history_enabled) document.querySelectorAll("#results > .group:not(.acc)").forEach((el,i) => { if (i < 6) loadHistory(el); });
 }
 
 async function run(q){

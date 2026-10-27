@@ -28,8 +28,11 @@ class ProductGroup(BaseModel):
     max_price: float
     best_offer_url: str
     best_offer_price: float
-    is_accessory: bool
+    is_accessory: bool                       # True = not the product itself (hidden by hide_accessories)
+    excluded_reason: Optional[str] = None    # accessory | spare part | add-on | price outlier
     is_refurbished: bool = False
+    relevance: str = "exact"                 # exact | variant | other (different model)
+    history_key: Optional[str] = None        # id for /history/{key}
     suspicious_offers: int
 
 
@@ -41,3 +44,5 @@ class SearchResponse(BaseModel):
     sources_ok: List[str] = []
     sources_failed: List[str] = []
     sources_disabled: Dict[str, str] = {}   # source -> reason, skipped by circuit breaker
+    dropped_non_english: int = 0            # listings removed because the title isn't English
+    history_enabled: bool = False           # True when the price logger (Redis) is configured
