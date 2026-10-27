@@ -14,7 +14,8 @@ def search_products(query: str, country: str = "IN") -> dict:
     params = {
         "engine": "google_shopping",
         "q": query,
-        "country": country,
+        "gl": country.lower(),   # SearchAPI uses gl (not "country") for the Google country
+        "hl": "en",
         "api_key": SEARCHAPI_KEY,
     }
 

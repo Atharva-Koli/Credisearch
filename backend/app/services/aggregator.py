@@ -1,3 +1,4 @@
+import re
 from typing import List
 from app.models.price import PriceItem
 
@@ -88,18 +89,22 @@ def normalize_searchapi_results(data: dict, limit: int = 5):
             title = item.get("title")
             link = item.get("link") or item.get("product_link")
 
+            price_raw = item.get("price") or ""
             price = item.get("extracted_price")
 
-            if price is None:
-                price_raw = item.get("price")
-                if price_raw:
-                    price = float(
-                        price_raw.replace("₹", "")
-                        .replace(",", "")
-                        .strip()
-                    )
+            if price is None and price_raw:
+                price = float(
+                    re.sub(r"[^\d.]", "", price_raw.replace(",", "")) or 0
+                )
 
             if not title or not price or not link:
+                continue
+
+            # Currency safety net: same USD->INR rule as the SerpAPI path.
+            # Any other foreign currency is dropped rather than mislabelled.
+            if "$" in price_raw:
+                price = float(price) * USD_TO_INR
+            elif price_raw and "₹" not in price_raw and re.search(r"[€£¥]", price_raw):
                 continue
 
             results.append(
