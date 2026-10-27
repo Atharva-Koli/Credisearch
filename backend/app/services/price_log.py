@@ -64,10 +64,16 @@ def log_search(query: str, groups, sources_ok: List[str], origin: str = "user") 
     now = datetime.now(timezone.utc)
     day = now.strftime("%Y-%m-%d")
 
-    tracked = [
+    candidates = [
         g for g in groups
         if not g.is_accessory and not g.is_refurbished and g.relevance != "other" and g.history_key
     ]
+    # two groups can map to the same product key: keep the one with more evidence
+    best_by_key = {}
+    for g in candidates:
+        if g.history_key not in best_by_key or g.offers > best_by_key[g.history_key].offers:
+            best_by_key[g.history_key] = g
+    tracked = sorted(best_by_key.values(), key=lambda g: -g.offers)
 
     event = {
         "ts": now.isoformat(timespec="seconds"),
@@ -75,7 +81,7 @@ def log_search(query: str, groups, sources_ok: List[str], origin: str = "user") 
         "q": query,
         "sources": sources_ok,
         "products": [
-            {"key": g.history_key, "fair": g.median_price, "min": g.min_price, "offers": g.offers}
+            {"key": g.history_key, "fair": g.median_price, "min": g.best_offer_price, "offers": g.offers}
             for g in tracked[:5]
         ],
     }
@@ -85,7 +91,8 @@ def log_search(query: str, groups, sources_ok: List[str], origin: str = "user") 
     ]
     for g in tracked[:5]:
         point = {
-            "fair": g.median_price, "min": g.min_price, "max": g.max_price,
+            # "min" is the best TRUSTED price (suspicious offers excluded), not the raw minimum
+            "fair": g.median_price, "min": g.best_offer_price, "max": g.max_price,
             "offers": g.offers, "best_url": g.best_offer_url,
         }
         commands.append(["HSET", "products", g.history_key, g.name])

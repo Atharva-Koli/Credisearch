@@ -5,6 +5,25 @@ from app.models.price import PriceItem
 USD_TO_INR = 83.0  # temporary fixed rate
 
 
+_MOJIBAKE_RE = re.compile(r"[ÃÂàáâ][\x80-\xbf¡-¿]|à¤|à¥")
+
+
+def fix_mojibake(text):
+    """
+    Repair text that was UTF-8 but got decoded as Latin-1/cp1252 somewhere upstream,
+    e.g. Hindi 'एप्पल' arriving as 'à¤\x8fà¤ªà¥\x8dà¤ªà¤²'. Without this, the broken
+    characters look like Latin letters and slip past the English-only filter.
+    """
+    if not isinstance(text, str) or not _MOJIBAKE_RE.search(text):
+        return text
+    for enc in ("cp1252", "latin-1"):
+        try:
+            return text.encode(enc).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+    return text
+
+
 def _image(item: dict):
     """Product thumbnail: SerpAPI/SearchAPI call it 'thumbnail', Serper 'imageUrl'."""
     img = item.get("thumbnail") or item.get("imageUrl") or item.get("image")
@@ -23,7 +42,7 @@ def normalize_serpapi_results(data: dict, limit: int = 5):
 
     for item in shopping_results:
         try:
-            title = item.get("title")
+            title = fix_mojibake(item.get("title"))
             link = item.get("product_link")
 
             price_raw = item.get("price")
@@ -95,7 +114,7 @@ def normalize_searchapi_results(data: dict, limit: int = 5):
 
     for item in shopping_results:
         try:
-            title = item.get("title")
+            title = fix_mojibake(item.get("title"))
             link = item.get("link") or item.get("product_link")
 
             price_raw = item.get("price") or ""
@@ -160,7 +179,7 @@ def normalize_serper_results(data: dict, limit: int = 5):
     results = []
     for item in data.get("shopping", []):
         try:
-            title = item.get("title")
+            title = fix_mojibake(item.get("title"))
             link = item.get("link")
             price = _price_to_inr(item.get("price") or "")
             if not title or not link or not price:

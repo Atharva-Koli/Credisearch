@@ -294,3 +294,28 @@ def test_decimal_screen_size_and_high_price_outlier():
     _flag_price_outliers(groups)
     reasons = {g.group_id: g.excluded_reason for g in groups}
     assert reasons == {"iphone": None, "tiktok": "price outlier", "skin": "price outlier"}
+
+
+def test_mojibake_hindi_is_repaired_then_filtered():
+    from app.services.aggregator import fix_mojibake
+    from app.services.ml.matcher import is_english
+    garbled = "एप्पल iPhone 17".encode("utf-8").decode("latin-1")
+    assert is_english(garbled)                      # the bug: looks Latin
+    assert fix_mojibake(garbled) == "एप्पल iPhone 17"
+    assert not is_english(fix_mojibake(garbled))    # now correctly dropped
+    assert fix_mojibake("Apple iPhone 17 (Sage, 256 GB)") == "Apple iPhone 17 (Sage, 256 GB)"
+
+
+def test_logger_uses_trusted_price_and_dedupes_keys(monkeypatch):
+    from app.services import price_log
+    fake = FakeRedis()
+    monkeypatch.setattr(price_log, "_pipeline", fake)
+    monkeypatch.setattr(price_log, "enabled", lambda: True)
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url="u") for t, p in [
+        ("Apple iPhone 15 128GB", 21999), ("Apple iPhone 15 128GB Blue", 65999),
+        ("Apple iPhone 15 (128 GB) Green", 67499), ("Apple iPhone 15 128GB Pink", 69900)]]
+    _, groups = analyze(items, "iphone 15")
+    price_log.log_search("iphone 15", groups, ["s"])
+    key = next(iter(price_log.list_products()))
+    point = price_log.get_history(key)["points"][0]
+    assert point["min"] == 65999          # the suspicious ₹21,999 is not the "lowest price"
