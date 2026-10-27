@@ -29,6 +29,7 @@ class ProductGroup(BaseModel):
     best_offer_url: str
     best_offer_price: float
     is_accessory: bool
+    is_refurbished: bool = False
     suspicious_offers: int
 
 

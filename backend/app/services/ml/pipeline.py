@@ -3,7 +3,7 @@ from statistics import median
 from typing import List, Tuple
 
 from app.models.price import PriceItem, ProductGroup
-from app.services.ml.matcher import cluster_titles, display_name, is_accessory
+from app.services.ml.matcher import cluster_titles, display_name, is_accessory, is_used
 from app.services.ml.deal_scorer import score_group
 
 
@@ -58,8 +58,9 @@ def analyze(items: List[PriceItem], query: str) -> Tuple[List[PriceItem], List[P
             best_offer_url=best.url,
             best_offer_price=best.price,
             is_accessory=group_is_accessory,
+            is_refurbished=is_used(group_items[0].title),
             suspicious_offers=sum(1 for i in idxs if enriched[i].deal_label == "suspicious"),
         ))
 
-    groups.sort(key=lambda g: (g.is_accessory, -g.offers, g.median_price))
+    groups.sort(key=lambda g: (g.is_accessory, g.is_refurbished, -g.offers, g.median_price))
     return enriched, groups

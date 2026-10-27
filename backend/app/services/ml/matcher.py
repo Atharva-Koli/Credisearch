@@ -18,6 +18,12 @@ VARIANT_WORDS = {
     "neo", "edge", "fold", "flip",
 }
 
+# Condition words: a refurbished phone is not the same offer as a new one
+USED_WORDS = {
+    "refurbished", "renewed", "used", "preowned", "pre-owned", "secondhand",
+    "unboxed", "open-box", "openbox", "parts", "cashify", "ovantica",
+}
+
 # Words that mean the listing is an accessory, not the product itself
 ACCESSORY_WORDS = {
     "case", "cover", "covers", "cases", "protector", "tempered", "glass",
@@ -82,6 +88,7 @@ def extract_attributes(title: str) -> Dict[str, Set[str]]:
     return {
         "storage": storage,
         "variants": words & VARIANT_WORDS,
+        "used": bool(words & USED_WORDS) or "pre owned" in t or "open box" in t,
         "model_nums": model_nums,
         "model_codes": model_codes,
     }
@@ -92,8 +99,17 @@ def display_name(title: str) -> str:
     words = [w for w in title.split() if w.strip("()[],-|").lower() not in COLOR_WORDS]
     name = " ".join(words)
     name = re.sub(r"\(\s*\)", "", name)
-    name = re.sub(r"[\s,\-|/]+$", "", name)
+    name = re.sub(r"[\s,\-|/]+(?=\)|$)", "", name)
+    # rebalance brackets left broken by removing a colour word
+    while name.count(")") > name.count("("):
+        i = name.rfind(")")
+        name = name[:i] + name[i + 1:]
+    name += ")" * (name.count("(") - name.count(")"))
     return re.sub(r"\s+", " ", name).strip() or title
+
+
+def is_used(title: str) -> bool:
+    return extract_attributes(title)["used"]
 
 
 def is_accessory(title: str, query: str) -> bool:
@@ -137,6 +153,8 @@ def cosine(a: Dict[str, float], b: Dict[str, float]) -> float:
 def compatible(a: Dict[str, Set[str]], b: Dict[str, Set[str]]) -> bool:
     """Hard guards: two listings can only be the same product if these agree."""
     if a["variants"] != b["variants"]:
+        return False
+    if a["used"] != b["used"]:
         return False
     if a["storage"] and b["storage"] and a["storage"] != b["storage"]:
         return False

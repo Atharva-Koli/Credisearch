@@ -68,3 +68,18 @@ def test_pipeline_best_offer_skips_suspicious():
     assert groups[0].best_offer_url == "real"
     assert groups[0].suspicious_offers == 1
     assert all(it.group_id == groups[0].group_id for it in enriched)
+
+
+def test_refurbished_kept_separate_from_new():
+    labels = cluster_titles([
+        "Apple iPhone 15 128GB Black",
+        "Refurbished Apple iPhone 15 128GB Black by Cashify",
+        "Apple iPhone 15 128GB - Renewed",
+    ])
+    assert labels[0] not in labels[1:]
+
+
+def test_display_name_brackets():
+    from app.services.ml.matcher import display_name
+    assert display_name("Apple iPhone 15 (128 GB, Black)") == "Apple iPhone 15 (128 GB)"
+    assert display_name("Apple iPhone 15 (128 GB) - Black") == "Apple iPhone 15 (128 GB)"

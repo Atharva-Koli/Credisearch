@@ -149,7 +149,7 @@ function render(data){
     return `<article class="group${g.is_accessory?" acc":""}">
       <div class="ghead">
         <div><h2 class="gname">${esc(g.name)}</h2>
-          <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${g.is_accessory?" · accessory":""}${sus}</div></div>
+          <div class="gmeta">${g.offers} offer${g.offers>1?"s":""}${g.is_accessory?" · accessory":""}${g.is_refurbished?' · <span style="color:var(--warn)">refurbished / used</span>':""}${sus}</div></div>
         <div class="best"><div class="p">${inr(g.best_offer_price)}</div>
           <a href="${esc(g.best_offer_url)}" target="_blank" rel="noopener">Best trusted offer →</a></div>
       </div>
