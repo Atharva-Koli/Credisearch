@@ -5,7 +5,7 @@ Your own search agent and price matcher.
 
 Search a product once. Credisearch pulls prices from multiple sources (SerpAPI, Serper.dev and SearchAPI Google Shopping; any source that runs out of credits is skipped automatically), **groups identical listings with ML**, and tells you which offers are real deals and which look too good to be true.
 
-📘 **Docs:** [ML.md](ML.md) explains the ML in full · [DEV.md](DEV.md) is the developer reference (setup, env vars, deploy, troubleshooting)
+📘 **Docs:** [ML.md](ML.md) explains the ML in full · [BACKEND.md](BACKEND.md) covers how the backend works end to end · [DEV.md](DEV.md) is the developer reference (setup, env vars, deploy, troubleshooting)
 
 ## ML layer (`backend/app/services/ml/`)
 

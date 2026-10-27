@@ -51,8 +51,12 @@ GET /search?q=iphone 15
   │  Fetch price sources │   circuit breaker skips sources that are out of credits)
   └─────────┬───────────┘
             ▼
-  ┌─────────────────────┐   aggregator.py: raw JSON → PriceItem(title, price in INR, url)
+  ┌─────────────────────┐   aggregator.py: raw JSON → PriceItem(title, price in INR, url, image)
   │  Normalise to INR    │   ($ prices converted, other currencies dropped)
+  └─────────┬───────────┘
+            ▼
+  ┌─────────────────────┐   is_english(): drop titles that are mostly non-Latin script
+  │  English filter      │   (e.g. Hindi listings)
   └─────────┬───────────┘
             ▼
   ┌─────────────────────┐   matcher.py
@@ -66,7 +70,13 @@ GET /search?q=iphone 15
   └─────────┬───────────┘
             ▼
   ┌─────────────────────┐   pipeline.py
-  │  Build groups, rank  │   best *trusted* offer per group, rank by match to query
+  │  3. CLEAN & RANK     │   accessories / spare parts / add-ons / price outliers flagged;
+  │                      │   relevance tier (exact / variant / other) vs the query;
+  │                      │   best *trusted* offer per group; ranked best-first
+  └─────────┬───────────┘
+            ▼
+  ┌─────────────────────┐   price_log.py (if Redis is configured)
+  │  Log prices          │   one point per product per day → future "buy now or wait" data
   └─────────┬───────────┘
             ▼
      JSON response → UI
@@ -145,9 +155,9 @@ Text similarity has a blind spot. `iPhone 15 128GB` and `iPhone 15 Pro 128GB` sh
 
 | Guard | How it's extracted | Prevents merging |
 |---|---|---|
-| **Variant words** must be identical | Words in `VARIANT_WORDS`: pro, max, plus, mini, ultra, lite, se, fe, air, neo, edge, fold, flip | iPhone 15 ↔ iPhone 15 Pro ↔ iPhone 15 Plus |
+| **Variant words** must be identical | Words in `VARIANT_WORDS`: pro, max, plus, mini, ultra, lite, se, fe, air, neo, edge, fold, flip, and single-letter suffixes c / s / t / r (as in Reno15**c**) | iPhone 15 ↔ iPhone 15 Pro ↔ iPhone 15 Plus |
 | **Storage** must match (if both state it) | All `NNgb`/`NNtb` values; the **largest** is storage, so "8GB RAM, 256GB" reads as 256GB | 128GB ↔ 256GB |
-| **Model numbers** must overlap (if both have them) | Bare numbers not followed by a unit | iPhone 15 ↔ iPhone 14 |
+| **Model numbers** must overlap (if both have them) | Bare numbers not followed by a unit, plus the number glued to a name ("reno15" → 15) | iPhone 15 ↔ iPhone 14, Reno15 ↔ Reno 14 |
 | **Model codes** must overlap (if both have them) | Tokens mixing letters and digits, excluding sizes and "5g" | Galaxy S24 ↔ S23, Sony XM5 ↔ XM4, OnePlus 12 ↔ 12R |
 | **Condition** must match | `USED_WORDS`: refurbished, renewed, used, pre-owned, open box, Cashify… | New ↔ refurbished |
 | **Kind** must match | Accessory/part words present or not (`ACCESSORY_WORDS ∪ PART_WORDS`) | "Reno 15 Pro Mini" ↔ "Reno 15 Pro Mini Display Combo" (identical first 5 words!) |
@@ -205,6 +215,9 @@ The group is named after its median-length title, with colour words stripped and
 | Sony WH-1000XM5 ×2 (different wording) · WH-1000XM4 | **2** groups (XM5 together, XM4 apart) |
 | Galaxy S24 (8GB RAM, 256GB) · S24 256GB · S23 256GB | **2** groups |
 | New iPhone 15 · Refurbished by Cashify · Renewed | new is kept apart from both refurbs |
+| Galaxy S24+ 256GB · S24 Plus 256GB · S24 256GB | **2** groups (`+` = Plus) |
+| Reno15 Pro 512GB · "Reno15 Pro – 200MP Camera & Dimensity…12GB 512GB" · "Reno15 Pro 12+512GB \| 6.7-inch" · Reno15c · Reno15 | **3** groups (the three Pro listings merge) |
+| Reno 15 Pro Mini · Reno 15 Pro Mini *Display and Touchscreen Combo* | **2** groups (a product never merges with its part) |
 
 ---
 
@@ -295,13 +308,16 @@ Six offers for iPhone 15 128GB:
 1. Runs `cluster_titles()` on all offers and gets a group label per offer.
 2. For each group:
    - runs `score_group()` on its prices and attaches `deal_label`, `deal_score`, `fair_price`, `vs_fair_pct`, `robust_z` to each offer
-   - flags it `is_accessory` (majority vote) and `is_refurbished`
-   - builds a `ProductGroup`: name, offer count, min/median/max price, **best trusted offer** (cheapest non-suspicious), suspicious count
-3. **Ranks groups:**
-   1. real products before accessories
-   2. groups that match the query first: a different model number or code (S23/S26 when you searched S24) ranks last, and a different variant or storage ranks below an exact match (searching "iphone 15 128gb" puts the plain 128GB model above Plus and 256GB)
+   - **majority vote** on `accessory_reason()`: if more than half the offers are accessories/parts/add-ons, the group is excluded with that reason
+   - flags `is_refurbished`, works out its **relevance** to the query (`_mismatch` → exact / variant / other)
+   - builds a `ProductGroup`: name, offer count, min/median/max price, **best trusted offer** (cheapest non-suspicious) and its image, suspicious count, and a spelling-independent `history_key`
+3. `_flag_price_outliers()`: groups under 20% of the anchor price are excluded as "price outlier".
+4. **Ranks groups:**
+   1. real products before excluded ones (accessories, parts, outliers)
+   2. relevance: `exact` → `variant` → `other`. `_mismatch` adds +3 for off-topic (under half the query words), a different model number or model code; +1 per extra or missing variant word; +1 for different storage. 0 = exact, 1–2 = variant, 3+ = other.
    3. new before refurbished
    4. more offers first (more evidence), then cheaper
+5. Copies each group's exclusion flag onto its offers.
 
 The route (`search.py`) runs the ML on **all** fetched offers *before* trimming to `limit`, because the statistics need the full picture.
 
@@ -314,7 +330,11 @@ The route (`search.py`) runs the ML on **all** fetched offers *before* trimming 
 | `SIMILARITY_THRESHOLD` | matcher.py | 0.55 | Fewer merges: safer, but the same product may split | More merges: risk of mixing products |
 | `MODEL_CODE_BONUS` | matcher.py | 0.20 | More lenient when model codes match | Stricter |
 | `NGRAM_SIZES` | matcher.py | (3, 4) | Longer n-grams are more word-like and less typo-tolerant | Shorter ones are noisier |
-| `VARIANT_WORDS`, `USED_WORDS`, `ACCESSORY_WORDS`, `COLOR_WORDS` | matcher.py | lists | Add words when you find a new failure | |
+| `MAX_TITLE_TOKENS` | matcher.py | 5 | More of the title counts (more marketing noise) | Only the brand/model words count |
+| `VARIANT_WORDS`, `USED_WORDS`, `ACCESSORY_WORDS`, `PART_WORDS`, `COLOR_WORDS`, `STOPWORDS` | matcher.py | lists | Add words when you find a new failure | |
+| `is_english(max_foreign_ratio)` | matcher.py | 0.15 | Allows more non-Latin letters | Stricter English-only |
+| `PRICE_OUTLIER_RATIO` | pipeline.py | 0.20 | Flags more cheap groups as accessories | Flags fewer |
+| `MIN_QUERY_OVERLAP` | pipeline.py | 0.5 | More results counted as off-topic | Fewer |
 | `SUSPICIOUS_RATIO` | deal_scorer.py | 0.55 | Flags more listings as suspicious | Flags fewer |
 | `GREAT_DEAL_PCT` | deal_scorer.py | −7% | | |
 | `OVERPRICED_PCT` | deal_scorer.py | +10% | | |
@@ -345,7 +365,8 @@ Being upfront about these builds credibility:
 3. **Fair price = the median of what *this search* returned.** If every seller is overpriced, "fair" is overpriced too. It's relative, not absolute.
 4. **Small groups are weak evidence.** A group of 2 can't really have a "suspicious" member.
 5. **Fixed USD→INR rate (83)** for the rare dollar listing.
-6. **No price history yet**, so it can't say whether today's price is good compared with last month.
+6. **Price history is just starting.** The logging pipeline is built, but until it has accumulated data (or the Amazon.in backfill is imported, §10) the app can't say whether today's price is good compared with last month.
+7. **The English-only and accessory rules are heuristics.** A listing whose title is mostly in English but describes a part in an unusual way can slip through; the price-outlier check is the safety net.
 
 ---
 
@@ -376,14 +397,29 @@ Data options found (Oct 2026):
 
 | Option | History | Cost | Catch |
 |---|---|---|---|
-| Keepa API | Long Amazon price history (Amazon.in supported, as far as known) | Paid, token-based | Amazon only |
+| **Apify "Amazon Price History API"** (`radeance/amazon-price-history-api`) | **Full Amazon.in history per product**, tested | ~$0.007 per product ($5 free credit/month) | Amazon only; third-party scraper, so treat it as a backfill source |
+| Keepa API | Long Amazon price history | Paid (from €49) | Amazon only |
 | Google Shopping price insights | Low/typical/high + recent history | Via SerpAPI | **US only** |
-| Log our own prices daily | Starts at zero | Free (Vercel cron + free Postgres) | Takes months to accumulate |
+| Log our own prices daily | Starts at zero | Free (built: Upstash Redis + Vercel cron) | Takes months to accumulate |
+
+**Test result (27 Oct 2026):** one Apify run for the iPhone 15 128GB (ASIN `B0CHX1W1XY`) returned **343 buy-box price points from Sept 2023 to July 2026**. Lowest price per month shows exactly the patterns the model needs to learn:
+
+| Period | Lowest price | What happened |
+|---|---|---|
+| Sept 2023 | ₹79,900 | Launch price |
+| Mar 2024 | ₹65,999 | First big dip |
+| Sept–Nov 2024 | ₹65,900 → ₹61,900 | iPhone 16 launch + festive sales |
+| Jan 2025 | ₹56,999 | Republic Day sale |
+| **Sept 2025** | **₹45,999** | iPhone 17 launch + festive sales: the all-time low, ~23% below the month before |
+| Apr–Jul 2026 | ₹59,900 | Price settled, then went out of stock |
+
+Output fields used by the importer: `asin`, `name`, `currency` (INR, prices in **rupees**), `image_url`, and the histories `price_buybox_history` (main series), `price_new_history`, `price_new_fba_history`, `price_prime_exclusive_history`, `n_offers_new_history`, each a list of `{date, price}` where `price: null` means unavailable at that time. Apify input: `{"country": "in", "identifiers": ["<ASIN or URL>"], "include_variants": false}`; the Console requires a max-cost cap of at least $0.25 per run.
 
 Planned approach:
-1. **Now:** a sale-calendar model built on Indian sale seasons (year-end sales, Republic Day sales in January, festive sales in Sept–Oct, mid-year sales) and launch cycles (phones drop when the successor launches). This is rules + calendar, not trained ML, and should be described that way.
-2. **Logging the fair price of each product group daily**: built (section 9b).
-3. **Once there's 3–6 months of data:** a time-series model (seasonal decomposition, or gradient boosting on features like days-to-next-sale and days-since-launch) to predict the probability and size of a price drop.
+1. **Backfill** real Amazon.in history for ~20 tracked products from Apify into the same Redis history store (planned importer).
+2. **A sale-calendar baseline** built on Indian sale seasons (year-end sales, Republic Day sales in January, festive sales in Sept–Oct, mid-year sales) and launch cycles (phones drop when the successor launches). This is rules + calendar, not trained ML, and should be described that way.
+3. **Logging the fair price of each product group daily**: built (section 9b).
+4. **With the backfilled years of data:** a time-series model (seasonal decomposition, or gradient boosting on features like days-to-next-sale and days-since-launch) to predict the probability and size of a price drop.
 
 ---
 
@@ -407,13 +443,16 @@ Yes: it's *unsupervised* ML. TF-IDF is a learned representation (the weights com
 Cost, latency, and explainability. An LLM call per listing would cost money and seconds on every search. This runs in milliseconds for free, and every decision can be explained ("not merged because 128GB ≠ 256GB").
 
 **"How do you know it works?"**
-Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches. The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
+Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (23 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
 
 **"What was the hardest part?"**
-Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars. Each one became a rule plus a test.
+Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars; Hindi listings and spare parts (display combos) showed up as "products"; Google returned Skechers shoes for a hockey-stick search. Each one became a rule plus a test.
 
 **"What would you do with more time?"**
-Price history and a "buy now or wait" prediction (§10), and a labelled evaluation set.
+The "buy now or wait" prediction on the real Amazon.in history (§10), with a waterfall chart explaining each prediction; a "wrong match" feedback button to collect labels; and a labelled evaluation set.
+
+**"It's a personal project, where does data come from with no users?"**
+A daily job collects prices on its own, and years of real Amazon.in history were backfilled through an API, so the model doesn't depend on traffic.
 
 ---
 
@@ -438,4 +477,4 @@ Price history and a "buy now or wait" prediction (§10), and a labelled evaluati
 
 ---
 
-**Code map:** `matcher.py` (sections 3.1–3.7) · `deal_scorer.py` (section 4) · `pipeline.py` (section 5) · `tests/test_ml.py` (section 3.8 and section 4.6)
+**Code map:** `matcher.py` (sections 3.1–3.7) · `deal_scorer.py` (section 4) · `pipeline.py` (sections 3.6b, 5) · `price_log.py` (section 9b) · `tests/test_ml.py` (sections 3.8, 4.6). For how the rest of the backend works (routes, sources, caching, storage, deployment), see [BACKEND.md](BACKEND.md).

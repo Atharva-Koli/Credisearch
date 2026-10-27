@@ -1,7 +1,7 @@
 # Credisearch: Developer Reference
 
 Personal reference for running, changing and deploying Credisearch.
-For how the ML works, see [ML.md](ML.md).
+For how the ML works, see [ML.md](ML.md). For the backend request flow, data models and storage, see [BACKEND.md](BACKEND.md).
 
 ---
 
