@@ -234,7 +234,7 @@ All three are Google Shopping APIs. Each search costs **1 credit per active sour
 All clients use a **20-second timeout** and raise on a missing key or an HTTP error status.
 
 ### Normalisation rules (`aggregator.py`)
-Every offer must end up with a title, a link and a positive **INR** price, or it's skipped.
+Every offer must end up with a title, a link and a positive **INR** price, or it's skipped. Titles first go through `fix_mojibake()`, which repairs text that was UTF-8 but arrived decoded as Latin-1 (e.g. Hindi showing up as "à¤…"). Otherwise those broken characters look like Latin letters and slip past the English-only filter.
 
 | Source | Price fields used | Currency handling |
 |---|---|---|
@@ -283,9 +283,9 @@ The state lives in process memory, so a new Vercel instance starts fresh. The wo
 |---|---|---|---|
 | `events` | List (newest first) | One JSON event per search: `{ts, origin: "user"\|"cron", q, sources, products: [{key, fair, min, offers}]}` | Trimmed to 5,000 |
 | `products` | Hash | `history_key → product name` | — |
-| `price:<history_key>` | Hash | `YYYY-MM-DD → {fair, min, max, offers, best_url}` | One field per day; the latest search that day wins |
+| `price:<history_key>` | Hash | `YYYY-MM-DD → {fair, min, max, offers, best_url}`; `min` is the best **trusted** price (suspicious offers excluded) | One field per day; the latest search that day wins |
 
-**What gets logged per search:** up to 5 groups that are not excluded, not refurbished and not "other" relevance.
+**What gets logged per search:** up to 5 groups that are not excluded, not refurbished and not "other" relevance. If two groups map to the same product key, the one with more offers wins.
 
 **`history_key`:** built by `canonical_key()`: lower-case, colours/stopwords removed, RAM dropped, storage kept, glued names split ("reno15" → "reno 15"). The most common key among a group's titles is used, so "OPPO Reno15 Pro 5G (12GB RAM, 256GB) Gold" and "Oppo Reno 15 Pro 256 GB" share `oppo-reno-15-pro-256gb`.
 
@@ -339,7 +339,7 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 ## 12. Tests
 
-`backend/tests/test_ml.py`: 24 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
+`backend/tests/test_ml.py`: 26 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
 
 | Area | What's covered |
 |---|---|

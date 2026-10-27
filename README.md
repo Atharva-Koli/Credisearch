@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?logo=vercel&logoColor=white" alt="Vercel">
   <img src="https://img.shields.io/badge/ML-pure_Python-22d3ee" alt="Pure-Python ML">
-  <img src="https://img.shields.io/badge/tests-24_passing-5fcf95" alt="24 tests passing">
+  <img src="https://img.shields.io/badge/tests-26_passing-5fcf95" alt="24 tests passing">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT license">
 </p>
 
@@ -119,7 +119,7 @@ The patterns are clear: prices drop with **sale seasons** (Republic Day, the fes
 | Storage | Upstash Redis (price history and event log, over REST) |
 | Frontend | Single-page vanilla HTML/CSS/JS served by FastAPI; mobile and dark mode |
 | Infra | Vercel (serverless function + daily cron), GitHub auto-deploys |
-| Quality | 24 pytest tests covering matching, scoring, outliers, the circuit breaker and the logger |
+| Quality | 26 pytest tests covering matching, scoring, outliers, the circuit breaker and the logger |
 
 ## API at a glance
 
