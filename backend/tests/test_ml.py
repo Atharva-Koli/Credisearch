@@ -202,6 +202,8 @@ class FakeRedis:
                 if not hasattr(self, "s"):
                     self.s = {}
                 self.s[key] = str(int(self.s.get(key, 0)) + 1); out.append(int(self.s[key]))
+            elif op == "DECR":
+                self.s[key] = str(int(self.s.get(key, 0)) - 1); out.append(int(self.s[key]))
             elif op == "EXPIRE":
                 out.append(1)
             elif op == "GET":
@@ -419,11 +421,12 @@ def test_rate_limit_windows_and_fail_open(monkeypatch):
     assert [rate_limit.check("a", t).allowed for _ in range(4)] == [True, True, True, False]
     v = rate_limit.check("a", t)
     assert v.reason == "minute" and 0 < v.retry_after <= 60
-    # next minute: allowed again until the per-day cap (5) is hit
-    assert rate_limit.check("a", t + 60).allowed is False and rate_limit.check("a", t + 60).reason == "day"
-    # another visitor is limited only by the site-wide budget (7 fresh searches/day)
-    results = [rate_limit.check("b", t + 120 + i * 60).allowed for i in range(3)]
-    assert results[-1] is False and rate_limit.check("b", t + 400).reason == "budget"
+    # next minute: 2 more allowed (5/day), then the per-day cap kicks in
+    assert [rate_limit.check("a", t + 60).allowed for _ in range(3)] == [True, True, False]
+    assert rate_limit.check("a", t + 120).reason == "day"
+    # another visitor is limited only by the site-wide budget (7 fresh searches/day, 5 used)
+    assert [rate_limit.check("b", t + 180 + i * 60).allowed for i in range(3)] == [True, True, False]
+    assert rate_limit.check("b", t + 400).reason == "budget"
     # Redis down -> never block searches
     monkeypatch.setattr(price_log, "_pipeline", lambda cmds: None)
     assert rate_limit.check("c", t).allowed
@@ -470,3 +473,31 @@ def test_search_route_cache_and_429(monkeypatch):
     r = c.get("/search", params={"q": "gamma"})
     assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0 and "wait" in r.json()["detail"]
     assert calls["n"] == 2
+
+
+def test_quota_is_read_only_and_tracks_usage(monkeypatch):
+    from app.services import rate_limit
+    _fake_redis(monkeypatch)
+    monkeypatch.setenv("RATE_LIMIT_PER_DAY", "30")
+    monkeypatch.setenv("DAILY_SEARCH_BUDGET", "40")
+    t = 1_800_000_000.0
+    q = rate_limit.remaining("v", t)
+    assert q["left_today"] == 30 and q["site"]["left"] == 40
+    assert rate_limit.remaining("v", t)["left_today"] == 30          # reading doesn't use anything up
+    rate_limit.check("v", t); rate_limit.check("v", t)
+    q = rate_limit.remaining("v", t)
+    assert q["you"]["left"] == 28 and q["site"]["left"] == 38 and q["left_today"] == 28
+    for i in range(36):                                               # other visitors drain the site budget
+        rate_limit.check(f"other{i % 2}", t + 3600 + i * 60)
+    assert rate_limit.remaining("v", t + 3600)["left_today"] == 2     # the site budget is now the tighter limit
+
+
+def test_blocked_attempts_do_not_drain_site_budget(monkeypatch):
+    from app.services import rate_limit
+    _fake_redis(monkeypatch)
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
+    monkeypatch.setenv("DAILY_SEARCH_BUDGET", "40")
+    t = 1_800_000_000.0
+    for _ in range(20):                       # 2 allowed, 18 blocked
+        rate_limit.check("spammer", t)
+    assert rate_limit.remaining("anyone", t)["site"]["left"] == 38

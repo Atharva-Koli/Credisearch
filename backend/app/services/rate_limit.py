@@ -68,13 +68,48 @@ def check(visitor: str, now: Optional[float] = None) -> Verdict:
     used_min, used_day, used_global = int(res[0]), int(res[2]), int(res[4])
 
     seconds_to_midnight = int(86400 - (now % 86400)) or 1
+    verdict = Verdict(True)
     if per_min and used_min > per_min:
-        return Verdict(False, int(60 - (now % 60)) or 1, "minute")
-    if per_day and used_day > per_day:
-        return Verdict(False, seconds_to_midnight, "day")
-    if budget and used_global > budget:
-        return Verdict(False, seconds_to_midnight, "budget")
-    return Verdict(True)
+        verdict = Verdict(False, int(60 - (now % 60)) or 1, "minute")
+    elif per_day and used_day > per_day:
+        verdict = Verdict(False, seconds_to_midnight, "day")
+    elif budget and used_global > budget:
+        verdict = Verdict(False, seconds_to_midnight, "budget")
+    if not verdict.allowed:
+        # a blocked attempt costs nothing, so refund the daily counters: otherwise someone
+        # hammering the button while blocked would eat the site-wide budget for everyone
+        price_log._pipeline([["DECR", f"rl:d:{visitor}:{day}"], ["DECR", f"rl:g:{day}"]])
+    return verdict
+
+
+def remaining(visitor: str, now: Optional[float] = None) -> dict:
+    """Read-only view of what's left today for this visitor (doesn't use anything up)."""
+    per_min = _int_env("RATE_LIMIT_PER_MINUTE", 5)
+    per_day = _int_env("RATE_LIMIT_PER_DAY", 30)
+    budget = _int_env("DAILY_SEARCH_BUDGET", 40)
+    now = time.time() if now is None else now
+    minute = int(now // 60)
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    res = price_log._pipeline([
+        ["GET", f"rl:m:{visitor}:{minute}"], ["GET", f"rl:d:{visitor}:{day}"], ["GET", f"rl:g:{day}"],
+    ]) if price_log.enabled() else None
+    if not res:
+        return {"enabled": False}
+    used_min, used_day, used_global = (int(x or 0) for x in res)
+
+    def left(limit, used):
+        return None if not limit else max(0, limit - used)
+
+    you, site = left(per_day, used_day), left(budget, used_global)
+    today = min(x for x in (you, site) if x is not None) if (you is not None or site is not None) else None
+    return {
+        "enabled": True,
+        "left_today": today,                 # what this visitor can actually still do today
+        "you": {"left": you, "limit": per_day or None},
+        "site": {"left": site, "limit": budget or None},
+        "this_minute": {"left": left(per_min, used_min), "limit": per_min or None},
+        "resets_in": int(86400 - (now % 86400)),
+    }
 
 
 MESSAGES = {

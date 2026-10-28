@@ -80,6 +80,12 @@ def run_search(q: str, country: str, sources, origin: str = "user"):
     return enriched, groups, sources_ok, sources_failed, dropped
 
 
+@router.get("/quota")
+def search_quota(request: Request):
+    """How many new searches this visitor has left today. Reading it costs nothing."""
+    return rate_limit.remaining(rate_limit.visitor_id(request))
+
+
 @router.get("", response_model=SearchResponse)
 def search_prices(
     request: Request,

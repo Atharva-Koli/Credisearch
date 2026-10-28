@@ -180,6 +180,7 @@ Interactive docs (Swagger) are at `/docs`.
 |---|---|---|
 | `GET /` | The search UI (HTML) | 200 |
 | `GET /search` | Search prices + ML | 200 · 422 bad input · **429 rate limit** (with `Retry-After`) · 502 all sources failed · 503 no source available |
+| `GET /search/quota` | Read-only: this visitor's searches left today (`left_today` = the tighter of their daily limit and the site budget), plus per-minute and site details. Shown in the header | 200 |
 | `GET /health` | Liveness check → `{"status": "ok"}` | 200 |
 | `GET /history` | Every product with stored history → `{enabled, products: {key: name}}` | 200 |
 | `GET /history/{key}` | Daily points for one product + summary (`days_tracked`, `first_date`, `lowest_min`, `lowest_date`, `latest_fair`) | 200 · 503 if Redis isn't configured |
@@ -287,6 +288,8 @@ Only **fresh** searches are limited, since only they cost credits (up to 3 per s
 - **Fixed-window counters:** `INCR` + `EXPIRE` in one pipelined request, so the limits are shared across all serverless instances (an in-memory limiter wouldn't be).
 - **Visitor = SHA-256 of the IP** (from Vercel's `x-real-ip` / `x-forwarded-for`), salted; raw IPs are never stored.
 - **Fails open:** if Redis is unreachable, searches are allowed rather than everyone being blocked.
+- **Blocked attempts are refunded:** the daily and site counters are decremented when a request is rejected, so hammering the button while blocked can't drain the site budget for everyone.
+- **`GET /search/quota`** reads the counters without changing them; the UI shows "N searches left today" in the header and refreshes it after each search.
 - The daily cron and tracker additions call the pipeline directly, so they're not affected by these limits. They have their own caps (10 tracked products, admin key).
 - Set any limit to `0` to disable it.
 
@@ -376,7 +379,7 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 ## 12. Tests
 
-`backend/tests/test_ml.py`: 34 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
+`backend/tests/test_ml.py`: 36 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
 
 | Area | What's covered |
 |---|---|

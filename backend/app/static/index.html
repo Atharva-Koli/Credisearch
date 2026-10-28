@@ -33,7 +33,11 @@ header .brand i{color:var(--muted)}
 header .brand{display:flex;align-items:center;gap:14px}
 header .logo{width:52px;height:52px;border-radius:14px;flex-shrink:0}
 header p{color:var(--muted);margin:10px 0 28px;max-width:520px}
-header{margin-bottom:22px}
+header{margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.quota{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px;color:var(--muted);background:var(--surface);cursor:help;white-space:nowrap}
+.quota b{color:var(--ink);font:600 14px "IBM Plex Mono",monospace}
+.quota .dot{width:8px;height:8px;border-radius:50%;background:var(--good)}
+.quota.low .dot{background:var(--warn)} .quota.out .dot{background:var(--bad)}
 .brandlink{color:inherit;text-decoration:none;display:inline-block}
 .brandlink:hover .logo{box-shadow:0 0 0 3px var(--line)}
 .home .hero{font-family:"Instrument Serif",serif;font-weight:400;font-size:64px;line-height:1.02;letter-spacing:-1px;margin:36px 0 18px}
@@ -168,6 +172,7 @@ footer a{color:inherit}
 <div class="wrap">
   <header>
     <a href="/" class="brandlink" id="homeLink" title="Credisearch home"><h1 class="brand"><img class="logo" src="/apple-touch-icon.png" alt="" width="52" height="52"><span>Credi<i>search</i></span></h1></a>
+    <div class="quota" id="quota" hidden></div>
   </header>
 
   <section id="tab-home" class="home" hidden>
@@ -350,7 +355,7 @@ async function run(q){
     $("#status").className = e.status === 429 ? "" : "err";
     $("#status").textContent = e.status === 429 ? "⏳ " + e.message : "Search failed: " + e.message;
     $("#results").innerHTML = "";
-  }finally{ $("#go").disabled = false; }
+  }finally{ $("#go").disabled = false; loadQuota(); }
 }
 
 $("#f").addEventListener("submit", e => { e.preventDefault(); run($("#q").value.trim()); });
@@ -476,6 +481,28 @@ try { const k = localStorage.getItem("credisearch_admin"); if (k) $("#trkKey").v
 $("#homeLink").addEventListener("click", e => { e.preventDefault(); showTab("home"); });
 $("#ctaSearch").addEventListener("click", () => showTab("search"));
 $("#ctaTrack").addEventListener("click", () => showTab("tracker"));
+/* ---------------- searches left today ---------------- */
+async function loadQuota(){
+  try{
+    const d = await fetch("/search/quota").then(r => r.json());
+    const el = $("#quota");
+    if (!d.enabled || d.left_today == null){ el.hidden = true; return; }
+    const n = d.left_today, siteTighter = d.site.left != null && (d.you.left == null || d.site.left < d.you.left);
+    const hrs = Math.ceil(d.resets_in / 3600);
+    el.hidden = false;
+    el.className = "quota" + (n === 0 ? " out" : n <= 5 ? " low" : "");
+    el.innerHTML = n === 0
+      ? `<span class="dot"></span>No new searches left today`
+      : `<span class="dot"></span><b>${n}</b> search${n === 1 ? "" : "es"} left today`;
+    el.title = [
+      d.you.limit ? `You: ${d.you.left} of ${d.you.limit} today` : null,
+      d.site.limit ? `Whole site: ${d.site.left} of ${d.site.limit} today${siteTighter ? " (the tighter limit right now)" : ""}` : null,
+      "Repeat searches and filter changes are free (cached).",
+      `Resets in about ${hrs} hour${hrs === 1 ? "" : "s"} (5:30 AM IST).`,
+    ].filter(Boolean).join("\n");
+  }catch(e){}
+}
+loadQuota();
 window.addEventListener("popstate", route);
 route();
 if (!TRK) fetch("/tracker").then(r => r.json()).then(d => {
