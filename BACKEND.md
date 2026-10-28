@@ -116,7 +116,7 @@ backend/
 | `ml/matcher.py` | Title cleaning, attribute extraction, TF-IDF, similarity, clustering, accessory/part/English checks, history keys | `normalize()`, `identity_tokens()`, `extract_attributes()`, `cluster_titles()`, `accessory_reason()`, `is_english()`, `canonical_key()`, `display_name()` |
 | `ml/deal_scorer.py` | Median/MAD fair price and deal labels per group | `score_group()` |
 | `ml/pipeline.py` | Runs matching + scoring, builds groups, flags price outliers, ranks | `analyze()`, `_mismatch()`, `_flag_price_outliers()`, `history_key()` |
-| `static/index.html` | The whole UI: plain HTML/CSS/JS, no build step; calls `/search` and `/history/{key}` | `render()`, `card()`, `loadHistory()`, `sparkline()` |
+| `static/index.html` | The whole UI: plain HTML/CSS/JS, no build step. Three views: **landing** (`/`, also opened by clicking the logo), **Search** (`?tab=search`, `?q=…`) and **Price tracker** (`?tab=tracker`), with browser back/forward support. Calls `/search`, `/history/{key}` and `/tracker` | `route()`, `showTab()`, `render()`, `card()`, `loadTracker()`, `timelineChart()` |
 
 `aggregator.merge_price_results()` is an older helper that's no longer used by the route (the route concatenates sources and lets the ML sort); it's kept for backwards compatibility.
 

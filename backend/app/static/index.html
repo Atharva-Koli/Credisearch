@@ -25,6 +25,7 @@
   }
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Inter Tight",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{max-width:880px;margin:0 auto;padding:48px 16px 80px}
 header .brand{font-family:"Instrument Serif",serif;font-size:56px;line-height:1;letter-spacing:-.5px;margin:0}
@@ -32,6 +33,27 @@ header .brand i{color:var(--muted)}
 header .brand{display:flex;align-items:center;gap:14px}
 header .logo{width:52px;height:52px;border-radius:14px;flex-shrink:0}
 header p{color:var(--muted);margin:10px 0 28px;max-width:520px}
+header{margin-bottom:22px}
+.brandlink{color:inherit;text-decoration:none;display:inline-block}
+.brandlink:hover .logo{box-shadow:0 0 0 3px var(--line)}
+.home .hero{font-family:"Instrument Serif",serif;font-weight:400;font-size:64px;line-height:1.02;letter-spacing:-1px;margin:36px 0 18px}
+.home .hero i{color:var(--muted)}
+.home .lead{font-size:18px;color:var(--muted);max-width:620px;margin:0 0 28px}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:44px}
+.btn-primary,.btn-ghost{border-radius:999px;font:600 16px "Inter Tight",sans-serif;padding:14px 26px;cursor:pointer}
+.btn-primary{border:0;background:var(--accent);color:var(--bg)}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--muted)}
+.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:12px}
+.feat div{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.feat b{display:block;font-size:16px;margin-bottom:4px}
+.feat p{margin:0;color:var(--muted);font-size:14px}
+.demo{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:28px 0 8px}
+.demo .tag{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:10px;display:block}
+.demo .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.demo .row:first-of-type{border-top:0}
+.demo .row span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.demo .pr{font:500 14px "IBM Plex Mono",monospace;min-width:76px;text-align:right}
 form{display:flex;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 20px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
 form input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:17px;outline:none}
 form button{border:0;border-radius:999px;background:var(--accent);color:var(--bg);font:600 15px "Inter Tight",sans-serif;padding:12px 22px;cursor:pointer}
@@ -129,6 +151,8 @@ footer a{color:inherit}
 @media (max-width:640px){
   .thumb.g{width:56px;height:56px}
   header .brand{font-size:42px}
+  .home .hero{font-size:44px}
+  .feat{grid-template-columns:1fr}
   header .logo{width:42px;height:42px;border-radius:11px}
   .how{grid-template-columns:1fr}
   .ghead{flex-direction:column}
@@ -143,11 +167,41 @@ footer a{color:inherit}
 <body>
 <div class="wrap">
   <header>
-    <h1 class="brand"><img class="logo" src="/apple-touch-icon.png" alt="" width="52" height="52"><span>Credi<i>search</i></span></h1>
-    <p>Search a product once. We pull prices from multiple sources, group identical listings with ML, and tell you which offers are real deals and which look too good to be true.</p>
+    <a href="/" class="brandlink" id="homeLink" title="Credisearch home"><h1 class="brand"><img class="logo" src="/apple-touch-icon.png" alt="" width="52" height="52"><span>Credi<i>search</i></span></h1></a>
   </header>
 
-  <nav class="tabs" role="tablist">
+  <section id="tab-home" class="home" hidden>
+    <h2 class="hero">Know the real price<br><i>before you buy.</i></h2>
+    <p class="lead">Credisearch searches several shopping sources at once, uses machine learning to recognise the same product listed fifty different ways, and tells you which offers are genuine deals and which are too good to be true.</p>
+    <div class="cta">
+      <button class="btn-primary" id="ctaSearch">Start searching →</button>
+      <button class="btn-ghost" id="ctaTrack">See tracked prices</button>
+    </div>
+
+    <div class="feat">
+      <div><b>🔎 One search, every store</b><p>Prices from three Google Shopping sources, converted to rupees and compared side by side.</p></div>
+      <div><b>🧠 Same product, grouped</b><p>"iPhone 15 128GB Blue" and "Apple iPhone 15 (128 GB) - Black" become one product. Pro, Plus and 256GB stay separate.</p></div>
+      <div><b>🛡️ Deals you can trust</b><p>Every offer is compared with the product's fair price. Scams, accessories and spare parts are flagged, never shown as the best deal.</p></div>
+      <div><b>📈 Price history</b><p>Tracked products are checked every morning, building a timeline of when prices actually drop.</p></div>
+    </div>
+
+    <div class="demo">
+      <span class="tag">Example: how offers for one product are judged</span>
+      <div class="row"><span>Apple iPhone 15 128GB (Black) – Brand New Sealed</span><span class="badge b-suspicious">Suspicious</span><span class="pr">₹21,999</span></div>
+      <div class="row"><span>iPhone 15 128GB Blue</span><span class="badge b-fair">Fair</span><span class="pr">₹65,999</span></div>
+      <div class="row"><span>Apple iPhone 15, 128GB, Green</span><span class="badge b-fair">Fair</span><span class="pr">₹67,499</span></div>
+      <div class="row"><span>Apple iPhone 15 128 GB Yellow</span><span class="badge b-overpriced">Overpriced</span><span class="pr">₹79,999</span></div>
+    </div>
+    <p class="trk-intro">Fair price here is ₹68,700. The ₹21,999 listing is 68% below it, so it's flagged instead of being shown as the "best deal".</p>
+
+  <section class="how">
+    <div><h3>1 · Match</h3><p>Each title becomes a TF-IDF vector of character n-grams. Listings with high cosine similarity are clustered as one product; storage size and variant words (Pro, Max) act as hard guards.</p></div>
+    <div><h3>2 · Price</h3><p>Within each product group, the median is the fair price and the median absolute deviation measures spread, so one fake listing can't skew it.</p></div>
+    <div><h3>3 · Judge</h3><p>Every offer gets a 0–100 deal score and a label: great deal, fair, overpriced, or suspicious when it's far too cheap to trust. Accessories, spare parts and price outliers are filtered out, and prices are logged daily to build a history.</p></div>
+  </section>
+  </section>
+
+  <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="search" class="on">Search</button>
     <button role="tab" data-tab="tracker">Price tracker <span class="count" id="trkCount"></span></button>
   </nav>
@@ -186,11 +240,7 @@ footer a{color:inherit}
     </div>
   </section>
 
-  <section class="how">
-    <div><h3>1 · Match</h3><p>Each title becomes a TF-IDF vector of character n-grams. Listings with high cosine similarity are clustered as one product; storage size and variant words (Pro, Max) act as hard guards.</p></div>
-    <div><h3>2 · Price</h3><p>Within each product group, the median is the fair price and the median absolute deviation measures spread, so one fake listing can't skew it.</p></div>
-    <div><h3>3 · Judge</h3><p>Every offer gets a 0–100 deal score and a label: great deal, fair, overpriced, or suspicious when it's far too cheap to trust. Accessories, spare parts and price outliers are filtered out, and prices are logged daily to build a history.</p></div>
-  </section>
+
 
   <footer>API docs at <a href="/docs">/docs</a></footer>
 </div>
@@ -295,7 +345,7 @@ async function run(q){
     const data = await r.json();
     if (!r.ok) throw new Error(data.detail ? (typeof data.detail === "string" ? data.detail : "Invalid query") : r.statusText);
     render(data);
-    history.replaceState(null, "", "?q=" + encodeURIComponent(q));
+    history.replaceState({view: "search"}, "", "/?q=" + encodeURIComponent(q));
   }catch(e){
     $("#status").className = "err"; $("#status").textContent = "Search failed: " + e.message;
     $("#results").innerHTML = "";
@@ -305,22 +355,39 @@ async function run(q){
 $("#f").addEventListener("submit", e => { e.preventDefault(); run($("#q").value.trim()); });
 document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => run(c.dataset.q)));
 $("#hideAcc").addEventListener("change", () => { if ($("#q").value.trim()) run($("#q").value.trim()); });
-const initial = new URLSearchParams(location.search).get("q");
-if (initial) run(initial);
+
 
 /* ---------------- Price tracker tab ---------------- */
 let TRK = null;
 const fmtDate = d => d ? new Date(d.length === 10 ? d + "T00:00:00" : d).toLocaleDateString("en-IN", {day:"numeric", month:"short", year:"numeric"}) : "";
 const adminKey = () => { try { return $("#trkKey").value || localStorage.getItem("credisearch_admin") || ""; } catch(e){ return $("#trkKey").value || ""; } };
 
-function showTab(name){
+function showTab(name, push = true){
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  $("#tab-home").hidden = name !== "home";
+  $("#tabs").hidden = name === "home";
   $("#tab-search").hidden = name !== "search";
   $("#tab-tracker").hidden = name !== "tracker";
-  const u = new URL(location.href);
-  if (name === "tracker") u.searchParams.set("tab", "tracker"); else u.searchParams.delete("tab");
-  history.replaceState(null, "", u);
-  if (name === "tracker" && !TRK) loadTracker();
+  if (push){
+    const u = new URL(location.origin + "/");
+    if (name === "tracker") u.searchParams.set("tab", "tracker");
+    if (name === "search"){
+      const q = $("#q").value.trim();
+      if (q && $("#results").children.length) u.searchParams.set("q", q); else u.searchParams.set("tab", "search");
+    }
+    if (u.href !== location.href) history.pushState({view: name}, "", u);
+  }
+  if (name === "tracker"){ if (TRK) renderTracker(); else loadTracker(); }
+  if (name === "search") setTimeout(() => $("#q").focus(), 0);
+  window.scrollTo(0, 0);
+}
+
+function route(){
+  const p = new URLSearchParams(location.search);
+  if (p.get("q")) { showTab("search", false); if ($("#q").value.trim() !== p.get("q")) run(p.get("q")); }
+  else if (p.get("tab") === "tracker") showTab("tracker", false);
+  else if (p.get("tab") === "search") showTab("search", false);
+  else showTab("home", false);
 }
 
 function timelineChart(points){
@@ -405,8 +472,16 @@ document.addEventListener("click", e => {
   trackerCall(b.dataset.act === "stop" ? "DELETE" : "POST", b.dataset.q);
 });
 try { const k = localStorage.getItem("credisearch_admin"); if (k) $("#trkKey").value = k; } catch(e){}
-if (new URLSearchParams(location.search).get("tab") === "tracker") showTab("tracker");
-else fetch("/tracker").then(r => r.json()).then(d => { TRK = d; $("#trkCount").textContent = d.tracked && d.tracked.length ? `(${d.tracked.length})` : ""; }).catch(() => {});
+$("#homeLink").addEventListener("click", e => { e.preventDefault(); showTab("home"); });
+$("#ctaSearch").addEventListener("click", () => showTab("search"));
+$("#ctaTrack").addEventListener("click", () => showTab("tracker"));
+window.addEventListener("popstate", route);
+route();
+if (!TRK) fetch("/tracker").then(r => r.json()).then(d => {
+  if (TRK) return;
+  TRK = d; $("#trkCount").textContent = d.tracked && d.tracked.length ? `(${d.tracked.length})` : "";
+  if (!$("#tab-tracker").hidden) renderTracker();
+}).catch(() => {});
 </script>
 </body>
 </html>
