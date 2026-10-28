@@ -5,7 +5,7 @@ from typing import List, Tuple
 from app.models.price import PriceItem, ProductGroup
 from app.services.ml.matcher import (
     accessory_reason, canonical_key, cluster_titles, display_name, extract_attributes,
-    is_used, normalize,
+    is_used, normalize, product_key,
 )
 from app.services.ml.deal_scorer import score_group
 
@@ -30,7 +30,7 @@ def history_key(titles: List[str]) -> str:
     Stable id for a product across searches ('apple-iphone-15-128gb'): the most
     common canonical key among the group's titles (ties -> the shortest).
     """
-    keys = [canonical_key(t) for t in titles]
+    keys = [product_key(t) for t in titles]
     return min(set(keys), key=lambda k: (-keys.count(k), len(k)))
 
 

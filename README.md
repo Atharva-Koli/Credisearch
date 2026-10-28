@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?logo=vercel&logoColor=white" alt="Vercel">
   <img src="https://img.shields.io/badge/ML-pure_Python-22d3ee" alt="Pure-Python ML">
-  <img src="https://img.shields.io/badge/tests-26_passing-5fcf95" alt="24 tests passing">
+  <img src="https://img.shields.io/badge/tests-30_passing-5fcf95" alt="24 tests passing">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT license">
 </p>
 
@@ -52,7 +52,7 @@ Sorting by price is useless until you know **which listings are the same product
 | 🧹 **Junk removal** | Filters accessories, spare parts, "X for Y" add-ons, price outliers, non-English listings and off-topic results |
 | 🛡️ **Best *trusted* offer** | The headline price skips suspicious listings, so a scam is never shown as the deal |
 | 🖼️ **Image previews** | Every offer shows its product image, so you can see which colour each price is for |
-| 📈 **Price history pipeline** | Logs a daily price per product (plus a daily job for tracked products) to power "buy now or wait" predictions |
+| 📈 **Price tracker** | A daily job tracks the products you choose (add or stop from the UI); each gets a price timeline, and stopped products keep their history |
 | 🔌 **Built to survive free tiers** | A circuit breaker skips sources that run out of credits, one failing API never breaks a search, and responses are cached |
 
 ## How it works
@@ -119,7 +119,7 @@ The patterns are clear: prices drop with **sale seasons** (Republic Day, the fes
 | Storage | Upstash Redis (price history and event log, over REST) |
 | Frontend | Single-page vanilla HTML/CSS/JS served by FastAPI; mobile and dark mode |
 | Infra | Vercel (serverless function + daily cron), GitHub auto-deploys |
-| Quality | 26 pytest tests covering matching, scoring, outliers, the circuit breaker and the logger |
+| Quality | 30 pytest tests covering matching, scoring, outliers, the circuit breaker and the logger |
 
 ## API at a glance
 
@@ -142,7 +142,7 @@ GET /search?q=iphone 15 128gb&limit=20&hide_accessories=true
 }
 ```
 
-Other endpoints: `/history`, `/history/{key}`, `/history/events/recent`, `/health`. Interactive docs: [`/docs`](https://credisearchvercel.vercel.app/docs). Details: [BACKEND.md](BACKEND.md).
+Other endpoints: `/tracker`, `/history`, `/history/{key}`, `/history/events/recent`, `/health`. Interactive docs: [`/docs`](https://credisearchvercel.vercel.app/docs). Details: [BACKEND.md](BACKEND.md).
 
 ## Run it locally
 
@@ -186,6 +186,7 @@ backend/app/
 - [x] Circuit breaker, caching, fault-tolerant sources
 - [x] Search UI with images, deal labels and price strips
 - [x] Price-history logging and a daily tracking job
+- [x] Price tracker tab: choose what to track, timelines that survive untracking
 - [ ] Backfill years of Amazon.in history for tracked products
 - [ ] **"Buy now or wait"** prediction, with an explanation for each prediction
 - [ ] "Wrong match" feedback to collect labels and learn matching thresholds from data

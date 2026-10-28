@@ -74,6 +74,7 @@ python -m pytest tests -q
 | `SERPAPI_KEY` | serpapi.com | 250 searches/month, **refills monthly** | Main source |
 | `SERPER_API_KEY` | serper.dev | 2,500 on signup, then ~$1/1k | Second source; also returns the seller name (Flipkart, Croma…) |
 | `SEARCHAPI_KEY` | searchapi.io | One-off free credits, **no refill** | Used until it runs out, then auto-skipped |
+| `ADMIN_TOKEN` | you choose it | — | Password for adding/stopping tracked products in the **Price tracker** tab |
 
 - Any source **without a key is skipped**. At least one key is required.
 - **Each search costs 1 credit per active source.** With all three active, one search uses 3 credits.
@@ -109,7 +110,9 @@ Stored in **Upstash Redis** (free tier) through its REST API, so no extra Python
 
 The history key is spelling-independent (`canonical_key` in `matcher.py`), so "Reno15 Pro" and "Reno 15 Pro" share one history.
 
-**Endpoints:** `/history` (all products), `/history/{key}` (points + summary), `/history/events/recent?limit=50` (event log). Test the cron by hand: `curl -H "Authorization: Bearer $CRON_SECRET" https://credisearchvercel.vercel.app/cron/log-prices`
+**Changing what's tracked:** open the **Price tracker** tab, enter your admin key (the `ADMIN_TOKEN` value) once, then add a product or click "Stop tracking". Stopped products keep their history. Up to 10 products.
+
+**Endpoints:** `/tracker` (tracked list + timelines), `/history` (all products), `/history/{key}` (points + summary), `/history/events/recent?limit=50` (event log). Test the cron by hand: `curl -H "Authorization: Bearer $CRON_SECRET" https://credisearchvercel.vercel.app/cron/log-prices`
 
 ## 5. Deploy
 

@@ -388,7 +388,7 @@ The next step toward "real" ML rigour:
 
 ## 9b. Price history: the data pipeline for future ML
 
-`price_log.py` logs, for every relevant product group, one point per day: `{fair (median), min, max, offers, best_url}`, keyed by a **spelling-independent product key** (`canonical_key`: "OPPO Reno15 Pro 5G (12GB RAM, 256GB) Gold" → `oppo-reno-15-pro-256gb`, using the most common key in the group). Data comes from user searches plus a daily cron over tracked products. This is the dataset the "buy now or wait" model will be trained on.
+`price_log.py` logs, for every relevant product group, one point per day: `{fair (median), min, max, offers, best_url}`, keyed by a **spelling-independent product key** (`product_key`: the identifying words at the start of the title plus storage, e.g. "OPPO Reno 15 Pro Mini 5G Glacier 256GB without offers" → `oppo-reno-15-pro-mini-256gb`, using the most common key in the group). Data comes from user searches plus a daily cron over tracked products. This is the dataset the "buy now or wait" model will be trained on.
 
 ## 10. Roadmap: "buy now or wait"
 
@@ -444,7 +444,7 @@ Yes: it's *unsupervised* ML. TF-IDF is a learned representation (the weights com
 Cost, latency, and explainability. An LLM call per listing would cost money and seconds on every search. This runs in milliseconds for free, and every decision can be explained ("not merged because 128GB ≠ 256GB").
 
 **"How do you know it works?"**
-Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (26 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
+Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (30 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
 
 **"What was the hardest part?"**
 Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars; Hindi listings and spare parts (display combos) showed up as "products"; Google returned Skechers shoes for a hockey-stick search. Each one became a rule plus a test.

@@ -183,6 +183,9 @@ Interactive docs (Swagger) are at `/docs`.
 | `GET /history/{key}` | Daily points for one product + summary (`days_tracked`, `first_date`, `lowest_min`, `lowest_date`, `latest_fair`) | 200 · 503 if Redis isn't configured |
 | `GET /history/events/recent?limit=50` | The latest search events (event log) | 200 |
 | `GET /cron/log-prices` | Daily job (hidden from docs); needs `Authorization: Bearer <CRON_SECRET>` when the secret is set | 200 · 401 |
+| `GET /tracker` | Tracked and previously tracked products, each with its main product's daily timeline, plus `can_edit` | 200 |
+| `POST /tracker` `{"q": "pixel 10"}` | Start tracking a product and record today's price immediately; needs `X-Admin-Token` | 200 · 401 · 403 (no `ADMIN_TOKEN` set) · 409 (duplicate or limit of 10) |
+| `DELETE /tracker?q=...` | Stop tracking; **the history is kept**; needs `X-Admin-Token` | 200 · 401 · 404 |
 | `GET /favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png` | Logo icons | 200 |
 
 ### `/search` parameters
@@ -283,11 +286,15 @@ The state lives in process memory, so a new Vercel instance starts fresh. The wo
 |---|---|---|---|
 | `events` | List (newest first) | One JSON event per search: `{ts, origin: "user"\|"cron", q, sources, products: [{key, fair, min, offers}]}` | Trimmed to 5,000 |
 | `products` | Hash | `history_key → product name` | — |
+| `tracked` | Hash | query → `{added_at}`: the list the daily job searches (editable from the UI) | Max 10 |
+| `tracked_removed` | Hash | query → `{added_at, removed_at}`: stopped products; their history stays | — |
+| `track_main` | Hash | query → history key of its main (exact-match) product, set by tracked searches | — |
+| `tracked_init` | String | Set once the list has been seeded from `TRACKED_PRODUCTS` / defaults | — |
 | `price:<history_key>` | Hash | `YYYY-MM-DD → {fair, min, max, offers, best_url}`; `min` is the best **trusted** price (suspicious offers excluded) | One field per day; the latest search that day wins |
 
 **What gets logged per search:** up to 5 groups that are not excluded, not refurbished and not "other" relevance. If two groups map to the same product key, the one with more offers wins.
 
-**`history_key`:** built by `canonical_key()`: lower-case, colours/stopwords removed, RAM dropped, storage kept, glued names split ("reno15" → "reno 15"). The most common key among a group's titles is used, so "OPPO Reno15 Pro 5G (12GB RAM, 256GB) Gold" and "Oppo Reno 15 Pro 256 GB" share `oppo-reno-15-pro-256gb`.
+**`history_key`:** built by `product_key()`: only the identifying words at the start of the title (first 5 meaningful words: brand, model, variant), colours removed, "Apple" dropped before iPhone/iPad/MacBook, glued names split ("reno15" → "reno 15"), plus storage. Seller junk at the end of a title never reaches the key. The most common key among a group's titles is used, so "OPPO Reno 15 Pro Mini 5G Glacier 256GB without offers" and "Oppo Reno 15 Pro Mini 5G Cocoa Brown 256GB" share `oppo-reno-15-pro-mini-256gb`.
 
 **Reading:** `get_history(key)` returns the points sorted by date; `/history/{key}` adds a summary. The UI draws a sparkline of the fair price when there are 2+ days.
 
@@ -295,11 +302,22 @@ The state lives in process memory, so a new Vercel instance starts fresh. The wo
 
 ---
 
+## 8b. Price tracker (editable tracked list)
+
+The **Price tracker** tab shows what's being tracked and a timeline for each product.
+
+- **The list lives in Redis** (`tracked`), so it's changed from the UI or the API, with no redeploy. The first time it's read, it's seeded from `TRACKED_PRODUCTS` or the defaults in `history.py`.
+- **Adding** (`POST /tracker`) checks the 10-product limit and duplicates, then immediately runs one search with Serper (`origin="track"`) so today's price appears at once.
+- **Stopping** (`DELETE /tracker`) moves the product to `tracked_removed`. **No price data is ever deleted**; the timeline keeps showing it under "No longer tracked". Tracking it again brings it back with the same history.
+- **Which product is "the" product for a query?** Tracked searches store the best-ranked exact match in `track_main` (e.g. "oneplus 15r" → `oneplus-15-r-256gb`, not the OnePlus 15). If that's missing, the closest key starting with `product_key(query)` is used.
+- **Editing is admin-only**: `ADMIN_TOKEN` env var, sent as the `X-Admin-Token` header and compared in constant time. Each tracked product costs a Serper credit every day, and the site is public. Without `ADMIN_TOKEN` the tracker is read-only. The UI remembers the key in the browser's local storage.
+- **Timeline** (`GET /tracker` → `price_log.get_timeline()`): a few pipelined Redis calls return every tracked and stopped product with its daily points (fair price and best trusted price) and a summary (latest, lowest and when, days of data).
+
 ## 9. Daily cron job
 
 - **Schedule:** `backend/vercel.json` → `/cron/log-prices` at **02:30 UTC (08:00 IST)** every day.
 - **Auth:** when `CRON_SECRET` is set, Vercel sends `Authorization: Bearer <CRON_SECRET>`; any other caller gets 401.
-- **Products:** `TRACKED_PRODUCTS` env var (comma-separated), else the defaults in `history.py`: iPhone 17, iPhone 16, OnePlus 15R, Oppo Reno 15 Pro Mini 5G, Samsung Galaxy S25.
+- **Products:** the editable list in Redis (see 8b). It's seeded the first time from `TRACKED_PRODUCTS` (comma-separated) or the defaults in `history.py`: iPhone 17, iPhone 16, OnePlus 15R, Oppo Reno 15 Pro Mini 5G, Samsung Galaxy S25.
 - **Sources:** **Serper only** (falls back to SerpAPI if Serper is unavailable), so it doesn't use up SerpAPI's 250/month. About 5 credits/day ≈ 150/month.
 - **Runs the same `run_search()` pipeline** with `origin="cron"`, so cron data and user data are identical in shape.
 - **Time guard:** stops starting new products after 50 s to stay inside the function time limit.
@@ -320,7 +338,8 @@ All optional, but search needs at least one source key. Template: `backend/.env.
 | `SEARCHAPI_KEY` | `searchapi.py` | SearchAPI source |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | `price_log.py` | Price history; added automatically by Vercel's Upstash integration |
 | `CRON_SECRET` | `history.py` | Protects the cron endpoint |
-| `TRACKED_PRODUCTS` | `history.py` | Products the cron searches daily |
+| `ADMIN_TOKEN` | `history.py` | Password for adding/stopping tracked products from the UI |
+| `TRACKED_PRODUCTS` | `history.py` | Seeds the tracked list the first time (after that, edit it in the UI) |
 | `APIFY_TOKEN` *(planned)* | importer | Backfilling Amazon.in history |
 
 Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they're set in Project → Settings → Environment Variables, and **a redeploy is required** after changing them.
@@ -339,7 +358,7 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 ## 12. Tests
 
-`backend/tests/test_ml.py`: 26 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
+`backend/tests/test_ml.py`: 30 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
 
 | Area | What's covered |
 |---|---|
@@ -347,7 +366,8 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 | Cleaning | English detection, accessory / spare-part / add-on rules, price outliers, off-topic results, relevance tiers, display names, history keys |
 | Scoring | Deal labels on the worked example, best trusted offer skips suspicious |
 | Reliability | Circuit breaker on HTTP 429 and on "run out of credits" messages; not on timeouts/500s |
-| History | Logger writes events and daily points through an in-memory fake Redis |
+| History | Logger writes events and daily points through an in-memory fake Redis; trusted lowest price; key dedupe |
+| Tracker | Seeding, add/remove, duplicates, the 10-item limit, history kept after stopping and restored on re-tracking, main-product selection, admin-key protection on the API |
 
 ---
 

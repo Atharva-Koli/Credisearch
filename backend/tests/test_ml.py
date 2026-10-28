@@ -196,6 +196,14 @@ class FakeRedis:
                 out.append(self.h.get(key, {}).get(args[0]))
             elif op == "HGETALL":
                 out.append([x for kv in self.h.get(key, {}).items() for x in kv])
+            elif op == "HDEL":
+                out.append(1 if self.h.get(key, {}).pop(args[0], None) is not None else 0)
+            elif op == "GET":
+                out.append(self.s.get(key) if hasattr(self, "s") else None)
+            elif op == "SET":
+                if not hasattr(self, "s"):
+                    self.s = {}
+                self.s[key] = args[0]; out.append("OK")
         return out
 
 
@@ -319,3 +327,68 @@ def test_logger_uses_trusted_price_and_dedupes_keys(monkeypatch):
     key = next(iter(price_log.list_products()))
     point = price_log.get_history(key)["points"][0]
     assert point["min"] == 65999          # the suspicious ₹21,999 is not the "lowest price"
+
+
+# ---------------- price tracker: editable list, history survives untracking ----------------
+
+def _fake_redis(monkeypatch):
+    from app.services import price_log
+    fake = FakeRedis()
+    monkeypatch.setattr(price_log, "_pipeline", fake)
+    monkeypatch.setattr(price_log, "enabled", lambda: True)
+    return price_log, fake
+
+
+def test_product_key_is_stable_across_colours_and_seller_junk():
+    from app.services.ml.matcher import product_key
+    assert product_key("OPPO Reno 15 Pro Mini 5G Glacier 256GB without offers") == \
+        product_key("Oppo Reno 15 Pro Mini 5G Cocoa Brown 256GB") == "oppo-reno-15-pro-mini-256gb"
+    assert product_key("Apple iPhone 17 (Sage, 256 GB)") == product_key("iPhone 17 256GB Mist") == "iphone-17-256gb"
+
+
+def test_tracker_seed_add_remove_keeps_history(monkeypatch):
+    price_log, fake = _fake_redis(monkeypatch)
+    seed = ["iphone 17", "samsung galaxy s25"]
+    assert [t["q"] for t in price_log.get_tracked(seed)] == seed          # seeded once
+    assert price_log.add_tracked("  OnePlus 15R ")["q"] == "oneplus 15r"    # normalised
+    assert price_log.add_tracked("oneplus 15r")["added"] is False           # no duplicates
+
+    # the daily job logs the tracked product
+    items = [PriceItem(source="s", title=t, price=p, currency="INR", url="u") for t, p in [
+        ("OnePlus 15R 5G 256GB", 47999), ("OnePlus 15R (256 GB)", 48999), ("OnePlus 15 512GB", 72999)]]
+    _, groups = analyze(items, "oneplus 15r")
+    price_log.log_search("oneplus 15r", groups, ["serper"], origin="cron")
+    assert fake.h["track_main"]["oneplus 15r"] == "oneplus-15-r-256gb"     # the exact match, not the OnePlus 15
+
+    # stop tracking: off the daily list, but the history is still there on the timeline
+    assert price_log.remove_tracked("oneplus 15r")["removed"]
+    assert "oneplus 15r" not in [t["q"] for t in price_log.get_tracked(seed)]
+    tl = price_log.get_timeline(seed)
+    stopped = {e["q"]: e for e in tl["stopped"]}
+    assert stopped["oneplus 15r"]["key"] == "oneplus-15-r-256gb"
+    assert stopped["oneplus 15r"]["points"][0]["fair"] == 48499.0
+    assert stopped["oneplus 15r"]["removed_at"]
+
+    # tracking it again brings it back with the same history
+    price_log.add_tracked("oneplus 15r")
+    tl = price_log.get_timeline(seed)
+    assert "oneplus 15r" in [e["q"] for e in tl["tracked"]] and not tl["stopped"]
+
+
+def test_tracker_limit(monkeypatch):
+    price_log, _ = _fake_redis(monkeypatch)
+    price_log.get_tracked([f"product {i}" for i in range(price_log.MAX_TRACKED)])
+    assert price_log.add_tracked("one too many")["added"] is False
+
+
+def test_tracker_api_requires_admin_key(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    _fake_redis(monkeypatch)
+    c = TestClient(app)
+    monkeypatch.delenv("ADMIN_TOKEN", raising=False)
+    assert c.post("/tracker", json={"q": "pixel 10"}).status_code == 403
+    monkeypatch.setenv("ADMIN_TOKEN", "s3cret")
+    assert c.post("/tracker", json={"q": "pixel 10"}, headers={"X-Admin-Token": "wrong"}).status_code == 401
+    assert c.delete("/tracker", params={"q": "pixel 10"}).status_code == 401
+    assert c.get("/tracker").status_code == 200        # viewing is public

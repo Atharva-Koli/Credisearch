@@ -56,6 +56,9 @@ COLOR_WORDS = {
     "phantom", "onyx", "obsidian", "porcelain", "hazel", "coral", "lime",
     "marble", "cobalt", "amber", "sapphire", "emerald", "charcoal",
     "sunset", "dusk", "aurora", "glow", "moonlight", "ocean", "forest", "sky",
+    "sand", "storm", "glacier", "cocoa", "brown", "ultramarine", "infinite", "mist",
+    "sage", "cosmic", "frost", "cloud", "dune", "aqua", "ice", "snow", "jade",
+    "crimson", "ruby", "pearl", "shadow", "stellar", "lunar", "icy", "iceblue",
 }
 
 _CONNECTIVITY = {"5g", "4g", "3g"}
@@ -148,6 +151,32 @@ def canonical_key(title: str) -> str:
         for part in re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", w).split():
             if part not in out:
                 out.append(part)
+    return "-".join(out)[:80]
+
+
+_APPLE_LINES = {"iphone", "ipad", "macbook", "airpods", "imac"}
+
+
+def product_key(title: str) -> str:
+    """
+    Stable id for a product's PRICE HISTORY: only the identifying words at the start of
+    the title (brand, model, variant) plus storage, so colours and seller junk at the end
+    ('... Glacier 256GB without offers') never split one product's history.
+      'OPPO Reno15 Pro Mini 5G Glacier 256GB without offers' -> 'oppo-reno-15-pro-mini-256gb'
+      'Apple iPhone 17 (Sage, 256 GB)'                       -> 'iphone-17-256gb'
+    """
+    attrs = extract_attributes(title)
+    words = identity_tokens(title)
+    if _APPLE_LINES & set(words):
+        words = [w for w in words if w != "apple"]   # "Apple iPhone" and "iPhone" are the same
+    out = []
+    for w in words:
+        if not re.fullmatch(r"[a-z0-9.]+", w):
+            continue
+        for part in re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", w).split():
+            if part not in out:
+                out.append(part)
+    out += sorted(attrs["storage"])
     return "-".join(out)[:80]
 
 
