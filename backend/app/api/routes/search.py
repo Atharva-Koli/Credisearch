@@ -1,10 +1,10 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.config import SERPAPI_KEY, SEARCHAPI_KEY, SERPER_API_KEY
-from app.models.price import SearchResponse
+from app.models.price import PriceItem, ProductGroup, SearchResponse
 from app.services.cache import get_cache, set_cache
 from app.services.api_clients.serpapi import search_products as serpapi_search
 from app.services.api_clients.searchapi import search_products as searchapi_search
@@ -16,7 +16,7 @@ from app.services.aggregator import (
 )
 from app.services.ml import analyze
 from app.services.ml.matcher import is_english
-from app.services import price_log, source_health
+from app.services import price_log, rate_limit, source_health
 
 logger = logging.getLogger("credisearch")
 
@@ -82,33 +82,49 @@ def run_search(q: str, country: str, sources, origin: str = "user"):
 
 @router.get("", response_model=SearchResponse)
 def search_prices(
-    q: str = Query(..., min_length=2, description="Product name"),
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=100, description="Product name"),
     country: str = Query("IN", description="Country code"),
     limit: int = Query(10, ge=1, le=40, description="Max offers returned"),
     hide_accessories: bool = Query(False, description="Drop accessories, spare parts and price outliers"),
 ):
-    # -------- CACHE CHECK --------
-    cache_key = f"{q.lower().strip()}:{country}:{limit}:{hide_accessories}"
-    cached_response = get_cache(cache_key)
-    if cached_response:
-        return cached_response
+    # -------- CACHE (full analysis per query; filters below are applied afterwards) --------
+    cache_key = f"search:{price_log.normalize_query(q)}:{country.upper()}"
+    cached = get_cache(cache_key)
 
-    sources = active_sources()
-    if not sources:
-        raise HTTPException(
-            status_code=503,
-            detail="No price source available: keys missing, or all sources are out of credits.",
-        )
+    if cached:
+        enriched = [PriceItem.model_validate(x) for x in cached["results"]]
+        groups = [ProductGroup.model_validate(x) for x in cached["groups"]]
+        sources_ok, sources_failed, dropped = cached["sources_ok"], cached["sources_failed"], cached["dropped"]
+    else:
+        # -------- RATE LIMIT: only fresh searches cost API credits --------
+        verdict = rate_limit.check(rate_limit.visitor_id(request))
+        if not verdict.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=rate_limit.MESSAGES[verdict.reason].format(s=verdict.retry_after),
+                headers={"Retry-After": str(verdict.retry_after)},
+            )
 
-    enriched, groups, sources_ok, sources_failed, dropped = run_search(q, country, sources)
+        sources = active_sources()
+        if not sources:
+            raise HTTPException(
+                status_code=503,
+                detail="No price source available: keys missing, or all sources are out of credits.",
+            )
+        enriched, groups, sources_ok, sources_failed, dropped = run_search(q, country, sources)
+        set_cache(cache_key, {
+            "results": [x.model_dump() for x in enriched],
+            "groups": [g.model_dump() for g in groups],
+            "sources_ok": sources_ok, "sources_failed": sources_failed, "dropped": dropped,
+        })
 
     if hide_accessories:
         enriched = [it for it in enriched if not it.is_accessory]
         groups = [g for g in groups if not g.is_accessory]
+    enriched = sorted(enriched, key=lambda it: it.price)
 
-    enriched.sort(key=lambda it: it.price)
-
-    response = SearchResponse(
+    return SearchResponse(
         query=q,
         country=country,
         results=enriched[:limit],
@@ -118,8 +134,5 @@ def search_prices(
         sources_disabled=source_health.disabled_sources(),
         dropped_non_english=dropped,
         history_enabled=price_log.enabled(),
+        cached=bool(cached),
     )
-
-    # -------- CACHE STORE --------
-    set_cache(cache_key, response)
-    return response

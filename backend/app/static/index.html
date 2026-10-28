@@ -319,7 +319,7 @@ function render(data){
   const hidden = main.length ? others : [];
 
   const failed = data.sources_failed.length ? ` · ${data.sources_failed.join(", ")} unavailable` : "";
-  const dropped = data.dropped_non_english ? ` · ${data.dropped_non_english} non-English listings removed` : "";
+  const dropped = (data.dropped_non_english ? ` · ${data.dropped_non_english} non-English listings removed` : "") + (data.cached ? " · cached" : "");
   $("#status").textContent = `${data.results.length} offers grouped into ${groups.length} product${groups.length>1?"s":""} · sources: ${data.sources_ok.join(", ")}${failed}${dropped}`;
 
   const sortOffers = g => byGroup[g.group_id].sort((a,b) => a.price - b.price);
@@ -343,11 +343,12 @@ async function run(q){
     const params = new URLSearchParams({q, limit: 40, hide_accessories: $("#hideAcc").checked});
     const r = await fetch("/search?" + params);
     const data = await r.json();
-    if (!r.ok) throw new Error(data.detail ? (typeof data.detail === "string" ? data.detail : "Invalid query") : r.statusText);
+    if (!r.ok) throw Object.assign(new Error(data.detail ? (typeof data.detail === "string" ? data.detail : "Invalid query") : r.statusText), {status: r.status});
     render(data);
     history.replaceState({view: "search"}, "", "/?q=" + encodeURIComponent(q));
   }catch(e){
-    $("#status").className = "err"; $("#status").textContent = "Search failed: " + e.message;
+    $("#status").className = e.status === 429 ? "" : "err";
+    $("#status").textContent = e.status === 429 ? "⏳ " + e.message : "Search failed: " + e.message;
     $("#results").innerHTML = "";
   }finally{ $("#go").disabled = false; }
 }

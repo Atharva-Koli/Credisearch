@@ -48,3 +48,4 @@ class SearchResponse(BaseModel):
     sources_disabled: Dict[str, str] = {}   # source -> reason, skipped by circuit breaker
     dropped_non_english: int = 0            # listings removed because the title isn't English
     history_enabled: bool = False           # True when the price logger (Redis) is configured
+    cached: bool = False                    # served from cache: no API credits used

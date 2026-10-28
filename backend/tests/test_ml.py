@@ -198,6 +198,12 @@ class FakeRedis:
                 out.append([x for kv in self.h.get(key, {}).items() for x in kv])
             elif op == "HDEL":
                 out.append(1 if self.h.get(key, {}).pop(args[0], None) is not None else 0)
+            elif op == "INCR":
+                if not hasattr(self, "s"):
+                    self.s = {}
+                self.s[key] = str(int(self.s.get(key, 0)) + 1); out.append(int(self.s[key]))
+            elif op == "EXPIRE":
+                out.append(1)
             elif op == "GET":
                 out.append(self.s.get(key) if hasattr(self, "s") else None)
             elif op == "SET":
@@ -399,3 +405,68 @@ def test_number_letter_suffix_variants():
     assert cluster_titles(["Apple iPhone 16 128GB", "Apple iPhone 16e 128GB",
                            "Apple iPhone 16 (128 GB) Black", "iPhone 16E 128GB White"]) == [0, 1, 0, 1]
     assert cluster_titles(["OnePlus 15R 256GB", "OnePlus 15 R 5G 256GB", "OnePlus 15 256GB"]) == [0, 0, 1]
+
+
+# ---------------- rate limiting + shared cache ----------------
+
+def test_rate_limit_windows_and_fail_open(monkeypatch):
+    from app.services import rate_limit, price_log
+    _fake_redis(monkeypatch)
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "3")
+    monkeypatch.setenv("RATE_LIMIT_PER_DAY", "5")
+    monkeypatch.setenv("DAILY_SEARCH_BUDGET", "7")
+    t = 1_800_000_000.0                                   # a fixed moment
+    assert [rate_limit.check("a", t).allowed for _ in range(4)] == [True, True, True, False]
+    v = rate_limit.check("a", t)
+    assert v.reason == "minute" and 0 < v.retry_after <= 60
+    # next minute: allowed again until the per-day cap (5) is hit
+    assert rate_limit.check("a", t + 60).allowed is False and rate_limit.check("a", t + 60).reason == "day"
+    # another visitor is limited only by the site-wide budget (7 fresh searches/day)
+    results = [rate_limit.check("b", t + 120 + i * 60).allowed for i in range(3)]
+    assert results[-1] is False and rate_limit.check("b", t + 400).reason == "budget"
+    # Redis down -> never block searches
+    monkeypatch.setattr(price_log, "_pipeline", lambda cmds: None)
+    assert rate_limit.check("c", t).allowed
+
+
+def test_visitor_id_hashes_ip():
+    from app.services.rate_limit import visitor_id
+
+    class R:
+        def __init__(self, h): self.headers, self.client = h, None
+    a, b = visitor_id(R({"x-real-ip": "1.2.3.4"})), visitor_id(R({"x-forwarded-for": "5.6.7.8, 10.0.0.1"}))
+    assert a != b and "1.2.3.4" not in a and len(a) == 16
+
+
+def test_search_route_cache_and_429(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    import app.api.routes.search as route
+    from app.services import cache
+    _fake_redis(monkeypatch)
+    cache._CACHE.clear()
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
+    calls = {"n": 0}
+
+    def fake_fetch(q, c):
+        calls["n"] += 1
+        return {"shopping": [{"title": f"{q} phone 128GB", "source": "Shop", "link": "https://x", "price": "₹50,000"},
+                             {"title": f"{q} phone (128 GB)", "source": "Shop2", "link": "https://y", "price": "₹52,000"}]}
+    monkeypatch.setattr(route, "active_sources", lambda only=None: [("serper", fake_fetch, route.normalize_serper_results)])
+    c = TestClient(app)
+
+    r1 = c.get("/search", params={"q": "alpha"})
+    assert r1.status_code == 200 and r1.json()["cached"] is False and calls["n"] == 1
+    # same query, different filters: served from cache, no API call, not rate-limited
+    for hide in ("true", "false", "true"):
+        r = c.get("/search", params={"q": "Alpha ", "hide_accessories": hide, "limit": 5})
+        assert r.status_code == 200 and r.json()["cached"] is True
+    assert calls["n"] == 1
+    # cache survives a "new serverless instance" (memory cleared) thanks to Redis
+    cache._CACHE.clear()
+    assert c.get("/search", params={"q": "alpha"}).json()["cached"] is True and calls["n"] == 1
+    # fresh searches: 2 per minute allowed (alpha used one), the next is 429 with Retry-After
+    assert c.get("/search", params={"q": "beta"}).status_code == 200
+    r = c.get("/search", params={"q": "gamma"})
+    assert r.status_code == 429 and int(r.headers["Retry-After"]) > 0 and "wait" in r.json()["detail"]
+    assert calls["n"] == 2

@@ -59,7 +59,8 @@ How the backend works, end to end: what happens on a search, what every module d
 | # | Step | Where | What happens |
 |---|---|---|---|
 | 1 | Validate | FastAPI / `search_prices()` | `q` must be ≥ 2 characters, `limit` 1–40. Bad input → **422**. |
-| 2 | Cache check | `cache.get_cache()` | Key = `query(lowercased):country:limit:hide_accessories`. A hit returns immediately (no API credits used). |
+| 2 | Cache check | `cache.get_cache()` | Key = `search:<normalised query>:<country>`, holding the **full** analysis, so changing filters or `limit` reuses it. Memory first (5 min), then Redis (6 h, shared by all instances). A hit skips steps 3–9: no API credits and no rate limiting. |
+| 2b | Rate limit | `rate_limit.check()` | Fresh searches only: per visitor (hashed IP) 5/min and 30/day, plus a site-wide budget of 40/day. Over a limit → **429** with `Retry-After` and a friendly message. Fails open if Redis is down. |
 | 3 | Pick sources | `active_sources()` | Every source with a key set **and** not switched off by the circuit breaker. None available → **503**. |
 | 4 | Fetch | `run_search()` → `api_clients/*.search_products()` | Sources are called one after another, each in its own `try`. A source that errors, or returns `{"error": ...}` with HTTP 200, is recorded as failed (and may trip the circuit breaker); the others carry on. |
 | 5 | Normalise | `aggregator.normalize_*_results()` | Up to 20 offers per source become `PriceItem`s: title, **price in INR**, URL, image, source. Foreign currencies are converted or dropped. |
@@ -69,7 +70,7 @@ How the backend works, end to end: what happens on a search, what every module d
 | 9 | Log | `price_log.log_search()` | If Redis is configured: one event + one daily price point per relevant product. Never blocks or breaks the search if it fails. |
 | 10 | Filter | `search_prices()` | With `hide_accessories=true`, excluded offers and groups are removed. |
 | 11 | Trim & respond | `search_prices()` | Offers sorted cheapest first, trimmed to `limit`; **groups are not trimmed**. The ML runs on all offers *before* trimming, because the statistics need the full picture. |
-| 12 | Cache store | `cache.set_cache()` | The response is kept for 5 minutes. |
+| 12 | Cache store | `cache.set_cache()` | The full analysis is stored in memory (5 min) and Redis (6 h); `limit` and `hide_accessories` are applied after the cache, so every filter combination is served from one entry. |
 
 Typical latency is 2–5 s, almost all of it waiting for the three external APIs (called sequentially). The ML itself takes milliseconds.
 
@@ -111,7 +112,8 @@ backend/
 | `api_clients/*.py` | One thin HTTP client per source. Raise if the key is missing or the HTTP status is an error; return raw JSON | `search_products(query, country)` |
 | `aggregator.py` | Turns each source's JSON into `PriceItem`s in INR; extracts thumbnails | `normalize_serpapi_results()`, `normalize_serper_results()`, `normalize_searchapi_results()`, `_price_to_inr()`, `_image()` |
 | `source_health.py` | Circuit breaker: switches off sources that are out of credits or have a bad key | `is_available()`, `record_failure()`, `disabled_sources()` |
-| `cache.py` | 5-minute in-memory response cache | `get_cache()`, `set_cache()` |
+| `cache.py` | Two-level search cache: memory (5 min) + Redis (6 h, shared) | `get_cache()`, `set_cache()` |
+| `rate_limit.py` | Fixed-window rate limits on fresh searches (per visitor and site-wide), stored in Redis | `check()`, `visitor_id()` |
 | `price_log.py` | Event log + daily price history in Upstash Redis (REST API) | `log_search()`, `get_history()`, `list_products()`, `recent_events()` |
 | `ml/matcher.py` | Title cleaning, attribute extraction, TF-IDF, similarity, clustering, accessory/part/English checks, history keys | `normalize()`, `identity_tokens()`, `extract_attributes()`, `cluster_titles()`, `accessory_reason()`, `is_english()`, `canonical_key()`, `display_name()` |
 | `ml/deal_scorer.py` | Median/MAD fair price and deal labels per group | `score_group()` |
@@ -177,7 +179,7 @@ Interactive docs (Swagger) are at `/docs`.
 | Method & path | Purpose | Responses |
 |---|---|---|
 | `GET /` | The search UI (HTML) | 200 |
-| `GET /search` | Search prices + ML | 200 · 422 bad input · 502 all sources failed · 503 no source available |
+| `GET /search` | Search prices + ML | 200 · 422 bad input · **429 rate limit** (with `Retry-After`) · 502 all sources failed · 503 no source available |
 | `GET /health` | Liveness check → `{"status": "ok"}` | 200 |
 | `GET /history` | Every product with stored history → `{enabled, products: {key: name}}` | 200 |
 | `GET /history/{key}` | Daily points for one product + summary (`days_tracked`, `first_date`, `lowest_min`, `lowest_date`, `latest_fair`) | 200 · 503 if Redis isn't configured |
@@ -269,9 +271,24 @@ Each source is fetched in its own `try`. One failure is logged, recorded in `sou
 The state lives in process memory, so a new Vercel instance starts fresh. The worst case is one wasted failed call per cold start, and failed calls don't use credits. To retire a source permanently, delete its key in Vercel.
 
 ### Cache (`cache.py`)
-- In-memory dict: key → (timestamp, response), **TTL 5 minutes**.
-- Saves credits when the same search is repeated (e.g. toggling the UI or reloading).
-- Per serverless instance and lost on cold start, so it's an optimisation, not a guarantee.
+- **Two levels:** an in-memory dict (5 minutes, per instance) and Redis (`cache:search:<query>:<country>`, **6 hours**, shared by every instance and surviving cold starts).
+- It stores the **full analysis** (all offers and groups), and filters are applied afterwards, so toggling "hide accessories" or changing `limit` never triggers a new paid search.
+- Responses say `"cached": true` when served from cache; the UI shows "· cached".
+
+### Rate limiting (`rate_limit.py`)
+Only **fresh** searches are limited, since only they cost credits (up to 3 per search).
+
+| Counter (Redis key) | Default | Env var | When exceeded |
+|---|---|---|---|
+| `rl:m:<visitor>:<minute>` | 5 per minute per visitor | `RATE_LIMIT_PER_MINUTE` | 429 "wait N seconds" |
+| `rl:d:<visitor>:<day>` | 30 per day per visitor | `RATE_LIMIT_PER_DAY` | 429 until midnight UTC |
+| `rl:g:<day>` | 40 per day for the whole site | `DAILY_SEARCH_BUDGET` | 429 "today's search budget is used" |
+
+- **Fixed-window counters:** `INCR` + `EXPIRE` in one pipelined request, so the limits are shared across all serverless instances (an in-memory limiter wouldn't be).
+- **Visitor = SHA-256 of the IP** (from Vercel's `x-real-ip` / `x-forwarded-for`), salted; raw IPs are never stored.
+- **Fails open:** if Redis is unreachable, searches are allowed rather than everyone being blocked.
+- The daily cron and tracker additions call the pipeline directly, so they're not affected by these limits. They have their own caps (10 tracked products, admin key).
+- Set any limit to `0` to disable it.
 
 ### Logging never breaks a search
 `price_log._pipeline()` catches every exception, logs a warning and returns `None`. A Redis outage only means that search isn't recorded.
@@ -339,6 +356,7 @@ All optional, but search needs at least one source key. Template: `backend/.env.
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) | `price_log.py` | Price history; added automatically by Vercel's Upstash integration |
 | `CRON_SECRET` | `history.py` | Protects the cron endpoint |
 | `ADMIN_TOKEN` | `history.py` | Password for adding/stopping tracked products from the UI |
+| `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_PER_DAY` / `DAILY_SEARCH_BUDGET` | `rate_limit.py` | Fresh-search limits (defaults 5 / 30 / 40; `0` disables) |
 | `TRACKED_PRODUCTS` | `history.py` | Seeds the tracked list the first time (after that, edit it in the UI) |
 | `APIFY_TOKEN` *(planned)* | importer | Backfilling Amazon.in history |
 
@@ -358,14 +376,14 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 ## 12. Tests
 
-`backend/tests/test_ml.py`: 31 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
+`backend/tests/test_ml.py`: 34 tests, run with `cd backend && python -m pytest tests -q`. They need no API keys and use no credits.
 
 | Area | What's covered |
 |---|---|
 | Matching | Wording/colour variants merge; Pro/Plus/Mini, storage, generations (15 vs 14, Reno15 vs Reno 14), model codes (S24/S23, XM5/XM4), `+` = Plus, `8/128` and `12+512GB`, Reno15c, spec-heavy titles, refurbished, product vs its part |
 | Cleaning | English detection, accessory / spare-part / add-on rules, price outliers, off-topic results, relevance tiers, display names, history keys |
 | Scoring | Deal labels on the worked example, best trusted offer skips suspicious |
-| Reliability | Circuit breaker on HTTP 429 and on "run out of credits" messages; not on timeouts/500s |
+| Reliability | Circuit breaker on HTTP 429 and on "run out of credits" messages; not on timeouts/500s; rate-limit windows (minute/day/budget) and failing open; IP hashing; cache shared across instances; filters served from cache; 429 with `Retry-After` |
 | History | Logger writes events and daily points through an in-memory fake Redis; trusted lowest price; key dedupe |
 | Tracker | Seeding, add/remove, duplicates, the 10-item limit, history kept after stopping and restored on re-tracking, main-product selection, admin-key protection on the API |
 
@@ -375,7 +393,7 @@ Locally they come from `backend/.env` (loaded by python-dotenv). On Vercel they'
 
 **Limitations**
 - Sources are fetched **sequentially**; running them in parallel (threads or `httpx.AsyncClient`) would cut latency to roughly the slowest single source.
-- Cache and circuit breaker are per instance and in memory.
+- The circuit breaker is per instance and in memory (the cache and rate limits are shared through Redis).
 - Fixed USD→INR rate (83).
 - The word lists (variants, accessories, parts, colours) are English and electronics-focused.
 - `rapidapi.py`, `scraping/`, `utils/helpers.py` and `core/logging.py` are empty placeholders from the original project.

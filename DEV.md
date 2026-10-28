@@ -75,6 +75,7 @@ python -m pytest tests -q
 | `SERPER_API_KEY` | serper.dev | 2,500 on signup, then ~$1/1k | Second source; also returns the seller name (Flipkart, Croma…) |
 | `SEARCHAPI_KEY` | searchapi.io | One-off free credits, **no refill** | Used until it runs out, then auto-skipped |
 | `ADMIN_TOKEN` | you choose it | — | Password for adding/stopping tracked products in the **Price tracker** tab |
+| `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_PER_DAY` / `DAILY_SEARCH_BUDGET` | optional | defaults 5 / 30 / 40 | Limits on fresh (uncached) searches per visitor and for the whole site; cached searches are free and unlimited |
 
 - Any source **without a key is skipped**. At least one key is required.
 - **Each search costs 1 credit per active source.** With all three active, one search uses 3 credits.
