@@ -99,7 +99,7 @@ All of it is **pure Python** (no numpy, scikit-learn or PyTorch). Section 7 expl
 | European decimals (screen sizes) | `6,1` | `6.1` (ignored as a spec, never read as model numbers 6 and 1) |
 | `+` suffix means Plus | `S24+` | `s24 plus` |
 | RAM/storage shorthand | `8/128`, `12+512GB` | `8gb 128gb`, `12gb 512gb` |
-| Letter suffix variant | `Reno15c` | `reno15 c` (c is a variant) |
+| Letter suffix variant | `Reno15c`, `iPhone 16e`, `OnePlus 15R` | `reno15 c`, `16 e`, `15 r` (the letter is a variant: 16e ≠ 16) |
 | Drop stopwords (marketing/noise) | `new`, `sealed`, `original`, `5g`, `ram`, `smartphone`… | removed |
 | Drop **colour words** | `black`, `blue`, `titanium`, `onyx`… | removed |
 
@@ -444,7 +444,7 @@ Yes: it's *unsupervised* ML. TF-IDF is a learned representation (the weights com
 Cost, latency, and explainability. An LLM call per listing would cost money and seconds on every search. This runs in milliseconds for free, and every decision can be explained ("not merged because 128GB ≠ 256GB").
 
 **"How do you know it works?"**
-Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (30 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
+Automated tests on real-world-style titles across iPhone, Samsung, Sony and OnePlus, plus checking live searches (31 tests at the time of writing). The honest next step is a labelled dataset to measure precision and recall and tune thresholds from data (§9).
 
 **"What was the hardest part?"**
 Real data. Colour names split identical phones into separate groups; RAM sizes ("8GB RAM, 256GB", "8/128") broke the storage check; "S24+" lost its "+" and merged with the S24; Sony XM4 merged with XM5 until model codes became a guard; one API silently returned US listings in dollars; Hindi listings and spare parts (display combos) showed up as "products"; Google returned Skechers shoes for a hockey-stick search. Each one became a rule plus a test.

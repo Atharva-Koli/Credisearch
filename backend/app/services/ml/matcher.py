@@ -15,7 +15,7 @@ NGRAM_SIZES = (3, 4)
 # Words that change WHICH product it is (never merge across these)
 VARIANT_WORDS = {
     "pro", "max", "plus", "mini", "ultra", "lite", "se", "fe", "air",
-    "neo", "edge", "fold", "flip", "c", "s", "t", "r",
+    "neo", "edge", "fold", "flip", "c", "s", "t", "r", "e",
 }
 
 # Condition words: a refurbished phone is not the same offer as a new one
@@ -72,6 +72,7 @@ def normalize(title: str) -> str:
     t = re.sub(r"\b(\d{1,2})\s*\+\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)  # "12+512gb" -> "12gb 512gb"
     t = re.sub(r"(?<=[a-z0-9])\+", " plus", t)  # "s24+" -> "s24 plus" (a different product)
     t = re.sub(r"\b([a-z]{3,}\d{1,3})([cs])\b", r"\1 \2", t)  # "reno15c" -> "reno15 c" (c/s suffix variant)
+    t = re.sub(r"\b(\d{1,3})([ecsrt])\b", r"\1 \2", t)  # "16e" -> "16 e", "15r" -> "15 r" (variant suffix)
     # RAM/storage shorthand "8/128" or "8gb/256gb" -> "8gb 128gb"
     t = re.sub(r"\b(\d{1,2})\s*(?:gb)?\s*/\s*(\d{2,4})\s*(?:gb)?\b", r"\1gb \2gb", t)
     t = re.sub(r"(\d),(\d)\b", r"\1.\2", t)  # "6,1" (European decimal) -> "6.1"

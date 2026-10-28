@@ -392,3 +392,10 @@ def test_tracker_api_requires_admin_key(monkeypatch):
     assert c.post("/tracker", json={"q": "pixel 10"}, headers={"X-Admin-Token": "wrong"}).status_code == 401
     assert c.delete("/tracker", params={"q": "pixel 10"}).status_code == 401
     assert c.get("/tracker").status_code == 200        # viewing is public
+
+
+def test_number_letter_suffix_variants():
+    # iPhone 16e is a different (cheaper) phone than the iPhone 16; OnePlus 15R vs 15
+    assert cluster_titles(["Apple iPhone 16 128GB", "Apple iPhone 16e 128GB",
+                           "Apple iPhone 16 (128 GB) Black", "iPhone 16E 128GB White"]) == [0, 1, 0, 1]
+    assert cluster_titles(["OnePlus 15R 256GB", "OnePlus 15 R 5G 256GB", "OnePlus 15 256GB"]) == [0, 0, 1]
